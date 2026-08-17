@@ -1,18 +1,13 @@
 package com.github.casiopicture.engine.util;
 
-import java.awt.Color;
-import java.awt.image.BufferedImage;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 /**
- * A utility class with static methods for encoding, mirroring the global helper functions in index.html.
+ * Byte-level helpers shared by the encoders, ported from the reference's global functions.
  */
 public final class EncoderUtils {
 
-    private EncoderUtils() {
-        // Private constructor to prevent instantiation
-    }
+    private EncoderUtils() {}
 
     /**
      * Renders a character sequence as one or more Python {@code bytes} literals.
@@ -129,33 +124,6 @@ public final class EncoderUtils {
         return bytes;
     }
 
-    /**
-     * Converts a string to a fixed-size, null-padded ASCII byte array.
-     *
-     * @param str The input string.
-     * @param n   The desired length of the byte array.
-     * @return The padded byte array.
-     */
-    public static byte[] stringToPaddedASCII(String str, int n) {
-        byte[] stringBytes = str.getBytes(StandardCharsets.US_ASCII);
-        byte[] paddedBytes = new byte[n];
-        System.arraycopy(stringBytes, 0, paddedBytes, 0, Math.min(stringBytes.length, n));
-        return paddedBytes;
-    }
-
-    /**
-     * Calculates the TI 8.x checksum for a given data array.
-     *
-     * @param data The input byte array.
-     * @return The 16-bit checksum.
-     */
-    public static int calculateTIChecksum(byte[] data) {
-        int checksum = 0;
-        for (byte b : data) {
-            checksum = (checksum + (b & 0xFF)) & 0xFFFF;
-        }
-        return checksum;
-    }
 
     /**
      * Inverts the bits of each byte in an array in-place.
@@ -189,19 +157,7 @@ public final class EncoderUtils {
         }
     }
 
-    /**
-     * Packs an RGB color into a 16-bit (5:6:5) integer.
-     *
-     * @param c The input color.
-     * @return The packed 16-bit integer.
-     */
-    public static int packColor565(Color c) {
-        int r = c.getRed() >> 3;    // 5 bits for red
-        int g = c.getGreen() >> 2;  // 6 bits for green
-        int b = c.getBlue() >> 3;   // 5 bits for blue
-        return (r << 11) | (g << 5) | b;
-    }
-
+    
     /**
      * Pads a byte array on the right with null bytes to a specific length.
      *
@@ -216,42 +172,5 @@ public final class EncoderUtils {
         byte[] padded = new byte[n];
         System.arraycopy(data, 0, padded, 0, data.length);
         return padded;
-    }
-
-    /**
-     * Encodes an image to monochrome bitmap data (1 bit per pixel).
-     * Black pixels (brightness < 128) are set to 1, white pixels to 0.
-     *
-     * @param image The BufferedImage to encode.
-     * @param msbFirst If true, the most significant bit represents the leftmost pixel (TI format).
-     *                 If false, the least significant bit represents the leftmost pixel (Zero format).
-     * @return Byte array containing the monochrome bitmap data.
-     */
-    public static byte[] encodeMonochromeBitmap(BufferedImage image, boolean msbFirst) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-        int bytesPerRow = (width + 7) / 8;
-        byte[] data = new byte[bytesPerRow * height];
-        int index = 0;
-
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x += 8) {
-                int byteValue = 0;
-                for (int bit = 0; bit < 8; bit++) {
-                    if (x + bit < width) {
-                        Color c = new Color(image.getRGB(x + bit, y));
-                        if (c.getRed() < 128) { // Black pixel
-                            if (msbFirst) {
-                                byteValue |= (1 << (7 - bit));
-                            } else {
-                                byteValue |= (1 << bit);
-                            }
-                        }
-                    }
-                }
-                data[index++] = (byte) byteValue;
-            }
-        }
-        return data;
     }
 }

@@ -2,177 +2,205 @@ package com.github.casiopicture.engine.converter;
 
 import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.Format;
+import com.github.casiopicture.engine.data.FormatConfig;
 import com.github.casiopicture.engine.util.Palette;
-import com.github.casiopicture.engine.util.PixelBuffer;
-import org.imgscalr.Scalr;
 
-import javax.imageio.ImageIO;
-import java.awt.*;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
 
-public class ImagePreprocessor {
+/**
+ * Turns a source image into the exact pixels an encoder expects.
+ *
+ * <p>Each format gets its own sequence of operations, transcribed from the ImageMagick command
+ * lines the reference assembles in {@code handleInCanvas} (tmp/index.html:597-636). The order
+ * matters and is not always the obvious one — the RGB-565 script formats reduce channel depth
+ * <em>before</em> resizing, while the others resize first — so the branches below follow the
+ * reference's structure rather than a tidier one.
+ *
+ * <p>What each family is doing:
+ * <ul>
+ *   <li>Opaque colour formats flatten onto white, because the calculator has no alpha to give.</li>
+ *   <li>Indexed formats snap to a fixed hardware palette before the encoder looks up indices.</li>
+ *   <li>Monochrome formats go grey, stretch contrast, then threshold; the ink ends up in alpha.</li>
+ *   <li>zpic keeps its alpha, since the encoder emits draw commands only for opaque pixels.</li>
+ * </ul>
+ */
+public final class ImagePreprocessor {
 
-    // Format groups for cleaner processing logic
-    private static final Set<Format> QUANTIZE_FORMATS = EnumSet.of(
-        Format.TI_8XV, Format.TI_GRAPHICS_PY, Format.TI_DRAW_CE_PY, Format.TI_DRAW_CX_PY
-    );
-
-    private static final Set<Format> MONOCHROME_WITH_FLATTEN_FORMATS = EnumSet.of(
-        Format.TI_8XI, Format.TI_83I, Format.TI_73I, Format.TI_82I,
-        Format.TI_85I, Format.TI_86I, Format.ZPIC
-    );
-
-    private static final Set<Format> MONOCHROME_SIMPLE_FORMATS = EnumSet.of(
-        Format.MICROBIT_PY, Format.TI_HUB_MB_PY,
-        Format.GRAPHIC_G3_PY, Format.GINT_G3_PY, Format.NSP_NS_PY
-    );
-
-    private static final Set<Format> INDEXED_CASIO_FORMATS = EnumSet.of(
-        Format.I_C2P, Format.CP_I_G3P, Format.CP01_I_G3P, Format.CP01_I_G4P
-    );
-
-    /**
-     * Private constructor to prevent instantiation
-     */
     private ImagePreprocessor() {}
 
     /**
-     * Preprocesses an image for conversion to a calculator format.
+     * The background used where the reference passes {@code -background none}.
      *
-     * @param inputImageBytes The raw bytes of the source image.
-     * @param format          The target format.
-     * @param options         The conversion options.
-     * @return The preprocessed image as PNG bytes.
-     * @throws Exception if any part of the preprocessing fails.
+     * <p>Everywhere else it passes nothing, and ImageMagick's default background is opaque white —
+     * not transparent. That distinction decides what fills the padding on fixed-size canvases.
      */
-    public static byte[] preprocess(byte[] inputImageBytes, Format format, ConversionOptions options) throws Exception {
-        BufferedImage image = ImageIO.read(new ByteArrayInputStream(inputImageBytes));
+    private static final Color TRANSPARENT = new Color(0, 0, 0, 0);
 
-        // 1. Handle resizing
-        image = resize(image, options);
-
-        // 2. Handle fit (centering on canvas)
-        if (options.enlargeSmaller()) {
-            image = fitToCanvas(image, options);
-        }
-
-        // 3. Apply format-specific processing
-        image = applyFormatSpecificProcessing(image, format, options);
-
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", outputStream);
-        return outputStream.toByteArray();
+    /** Format branches where the reference passes {@code +dither}, turning dithering off. */
+    private static boolean noDither(Format format) {
+        return switch (format) {
+            case TI_8XV, HPPRIME_PY,
+                 CASIOPLOT_G3_PY, GINT_G3_PY, NSP_NS_PY, GRAPHIC_NS_PY, GRAPHIC_G3_PY,
+                 TI_GRAPHICS_PY, TI_DRAW_CE_PY, TI_DRAW_CX_PY, GRAPHIC_PY, GRAPHIC_CG_PY,
+                 GINT_CG_PY, NSP_CX_PY, CASIOPLOT_CG_PY, KANDINSKY_PY, KANDINSKY_CG_PY,
+                 TI_HUB_RGBARR_PY -> true;
+            default -> false;
+        };
     }
 
-    private static BufferedImage resize(BufferedImage image, ConversionOptions options) {
-        if (options.keepRatio()) {
-            if (image.getWidth() > options.width() || image.getHeight() > options.height()) {
-                return Scalr.resize(image, Scalr.Method.QUALITY, Scalr.Mode.AUTOMATIC, options.width(), options.height());
+    /** Formats that resize to one pixel narrower and splice the column back on afterwards. */
+    private static boolean splicesColumn(Format format) {
+        return switch (format) {
+            case TI_8CA, TI_8CI, TI_8XI, TI_83I, TI_73I, TI_82I, TI_85I, TI_86I -> true;
+            default -> false;
+        };
+    }
+
+    public static BufferedImage preprocess(BufferedImage source, Format format, ConversionOptions options)
+            throws IOException {
+        BufferedImage image = ImageOps.toArgb(source);
+        FormatConfig config = FormatConfig.of(format);
+
+        // Whether the *source* had any transparency. Two of the monochrome script formats reorder
+        // their contrast handling based on this.
+        boolean sourceTransparent = ImageOps.hasTransparency(image);
+
+        int width = config.clampWidth(options.width());
+        int height = config.clampHeight(options.height());
+        int colors = config.clampColors(options.colors());
+
+        // The spliced formats resize into a canvas one pixel narrower, then get the column back.
+        int resizeWidth = splicesColumn(format) ? width - 1 : width;
+
+        // ImageMagick dithers by default; the reference disables it with `+dither` on some format
+        // branches and not others. It is a persistent setting, so it also governs the `-colors`
+        // step that follows. Leaving it on is what keeps a photo readable at 2 or 8 colours.
+        boolean dither = !noDither(format);
+        boolean exact = !options.keepRatio();
+        boolean shrinkOnly = !options.enlargeSmaller();
+
+        return switch (format) {
+            case TI_8XV -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.channelDepth(img, 5, 6, 5, 1);
+                yield ImageOps.quantize(img, colors, dither);
             }
-            return image;
-        } else {
-            return Scalr.resize(image, Scalr.Method.QUALITY, Scalr.Mode.FIT_EXACT, options.width(), options.height());
-        }
-    }
 
-    private static BufferedImage fitToCanvas(BufferedImage image, ConversionOptions options) {
-        BufferedImage canvas = new BufferedImage(options.width(), options.height(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = canvas.createGraphics();
-        g.setColor(Color.WHITE);
-        g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
-        int x = (canvas.getWidth() - image.getWidth()) / 2;
-        int y = (canvas.getHeight() - image.getHeight()) / 2;
-        g.drawImage(image, x, y, null);
-        g.dispose();
-        return canvas;
-    }
+            case TI_8CA -> {
+                BufferedImage img = ImageOps.flatten(image, Color.WHITE);
+                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.quantize(img, colors, dither);
+                yield ImageOps.spliceColumnRight(img, Color.WHITE);
+            }
 
-    private static BufferedImage applyFormatSpecificProcessing(BufferedImage image, Format format, ConversionOptions options) throws IOException {
-        if (QUANTIZE_FORMATS.contains(format) && options.colors() > 0) {
-            return quantize(image, options.colors());
-        }
+            case TI_8CI -> {
+                // -background none, so both the padding and the spliced column stay transparent.
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, TRANSPARENT);
+                img = ImageOps.remap(img, Palette.load("pal8ci.png"), dither);
+                img = ImageOps.quantize(img, colors, dither);
+                yield ImageOps.spliceColumnRight(img, TRANSPARENT);
+            }
 
-        if (format == Format.TI_8CI) {
-            return remapToPalette(image);
-        }
+            case TI_8XI, TI_83I, TI_73I, TI_82I, TI_85I, TI_86I -> {
+                BufferedImage img = ImageOps.flatten(image, Color.WHITE);
+                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.grayscale(img);
+                img = ImageOps.autoLevel(img);
+                img = ImageOps.posterize(img, 2, dither);
+                img = ImageOps.quantize(img, colors, dither);
+                img = ImageOps.spliceColumnRight(img, Color.WHITE);
+                // The ink is carried by alpha from here on: white becomes transparent and the
+                // encoder packs one bit per pixel straight out of the alpha channel.
+                yield ImageOps.makeTransparent(img, Color.WHITE);
+            }
 
-        if (MONOCHROME_WITH_FLATTEN_FORMATS.contains(format)) {
-            image = flatten(image);
-            image = toGrayscale(image);
-            return toBlackAndWhite(image);
-        }
+            case ZPIC -> {
+                // -background none: the encoder emits a draw command per opaque pixel and simply
+                // skips the rest, so the padding must stay transparent.
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, TRANSPARENT);
+                yield ImageOps.quantize(img, colors, dither);
+            }
 
-        if (MONOCHROME_SIMPLE_FORMATS.contains(format)) {
-            image = toGrayscale(image);
-            return toBlackAndWhite(image);
-        }
+            case C2P, CP_G3P, CP01_G3P, CP01_G4P -> {
+                BufferedImage img = ImageOps.flatten(image, Color.WHITE);
+                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                yield ImageOps.quantize(img, colors, dither);
+            }
 
-        if (INDEXED_CASIO_FORMATS.contains(format)) {
-            image = flatten(image);
-            image = toGrayscale(image);
-            return toBlackAndWhite(image);
-        }
+            case I_C2P, CP_I_G3P, CP01_I_G3P, CP01_I_G4P -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.remap(img, Palette.load("palcp.png"), dither);
+                yield ImageOps.quantize(img, colors, dither);
+            }
 
-        // Default: no additional processing needed
-        return image;
-    }
+            case CASIOPLOT_G3_PY, GINT_G3_PY, NSP_NS_PY, GRAPHIC_NS_PY, GRAPHIC_G3_PY -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.grayscale(img);
+                // On a transparent source the reference thresholds before stretching contrast, and
+                // otherwise stretches first. The order changes which shades survive.
+                if (sourceTransparent) {
+                    img = ImageOps.posterize(img, 2, dither);
+                    img = ImageOps.autoLevel(img);
+                } else {
+                    img = ImageOps.autoLevel(img);
+                    img = ImageOps.posterize(img, 2, dither);
+                }
+                yield ImageOps.quantize(img, colors, dither);
+            }
 
-    private static BufferedImage quantize(BufferedImage source, int colors) {
-        return ImageQuantizer.quantize(source, colors);
+            case TI_GRAPHICS_PY, TI_DRAW_CE_PY, TI_DRAW_CX_PY, GRAPHIC_PY, GRAPHIC_CG_PY,
+                 GINT_CG_PY, NSP_CX_PY, CASIOPLOT_CG_PY, KANDINSKY_PY, KANDINSKY_CG_PY -> {
+                // Depth reduction first, then resize: the reference orders it this way, and
+                // resampling after the reduction lets intermediate shades back in.
+                BufferedImage img = ImageOps.channelDepth(image, 5, 6, 5, 1);
+                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, null);
+                yield ImageOps.quantize(img, colors, dither);
+            }
+
+            case HPPRIME_PY -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.channelDepth(img, 8, 8, 8, 1);
+                yield ImageOps.quantize(img, colors, dither);
+            }
+
+            case MICROBIT_PY, TI_HUB_MB_PY -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.grayscale(img);
+                img = ImageOps.autoLevel(img);
+                img = ImageOps.posterize(img, 10, dither);
+                img = ImageOps.quantize(img, colors, dither);
+                // -colorspace RGB moves to linear light before the negate; the encoder reads the
+                // brightness digits off green afterwards.
+                img = ImageOps.toLinearRgb(img);
+                img = ImageOps.setRed(img, 0);
+                yield ImageOps.negateRed(img);
+            }
+
+            default -> {
+                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = ImageOps.channelDepth(img, 8, 8, 8, 1);
+                yield ImageOps.quantize(img, colors, dither);
+            }
+        };
     }
 
     /**
-     * Flattens a potentially transparent image onto a white background.
+     * Resizes, and for fixed-size formats pads the result out to the full canvas.
+     *
+     * <p>The reference only appends {@code -extent} when the canvas is not user-editable. A format
+     * whose size the user can change is fitted inside the box and left at whatever size that gave;
+     * a fixed-size one is always padded to exactly its canvas, because the calculator expects a
+     * specific number of pixels.
      */
-    private static BufferedImage flatten(BufferedImage source) {
-        BufferedImage flat = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = flat.createGraphics();
-        g.setColor(Color.WHITE);
-        g.fillRect(0, 0, flat.getWidth(), flat.getHeight());
-        g.drawImage(source, 0, 0, null);
-        g.dispose();
-        return flat;
-    }
-
-    private static BufferedImage toGrayscale(BufferedImage source) {
-        if (source.getType() == BufferedImage.TYPE_BYTE_GRAY) {
-            return source;
+    private static BufferedImage resize(BufferedImage image, int width, int height,
+                                        boolean exact, boolean shrinkOnly,
+                                        FormatConfig config, Color background) {
+        BufferedImage resized = ImageOps.resize(image, width, height, exact, shrinkOnly);
+        if (!config.editableSize()) {
+            resized = ImageOps.extent(resized, width, height, background);
         }
-        BufferedImage gray = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
-        Graphics2D g = gray.createGraphics();
-        g.drawImage(source, 0, 0, null);
-        g.dispose();
-        return gray;
-    }
-
-    private static BufferedImage toBlackAndWhite(BufferedImage source) {
-        BufferedImage bw = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_BYTE_BINARY);
-        Graphics2D g = bw.createGraphics();
-        g.drawImage(source, 0, 0, null);
-        g.dispose();
-        return bw;
-    }
-
-    /**
-     * Remaps an image to the TI-8CI fixed palette.
-     */
-    private static BufferedImage remapToPalette(BufferedImage source) throws IOException {
-        Palette palette = Palette.load("pal8ci.png");
-
-        BufferedImage remapped = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_BYTE_INDEXED, IndexColorModelFactory.create(palette));
-        byte[] pixels = ((DataBufferByte) remapped.getRaster().getDataBuffer()).getData();
-        PixelBuffer px = PixelBuffer.of(source);
-
-        for (int i = 0; i < px.size(); i++) {
-            pixels[i] = (byte) palette.nearest(px.raw(i));
-        }
-        return remapped;
+        return resized;
     }
 }
