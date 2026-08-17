@@ -1,0 +1,69 @@
+/*
+ * Small additions on top of the AtlantaFX Primer theme.
+ *
+ * Deliberately thin: the theme already supplies colours, typography and control styling for both
+ * light and dark, and everything here is written in terms of its `-color-*` variables so both
+ * follow automatically. The previous version carried 644 lines of hand-rolled styling that had to
+ * be maintained against every control.
+ */
+
+.converter-view {
+    -fx-background-color: -color-bg-default;
+}
+
+.panel {
+    -fx-background-color: -color-bg-subtle;
+}
+
+/* Side panels read as separate surfaces; in dark mode the fills alone are too close to tell. */
+.converter-view > .panel {
+    -fx-border-color: transparent -color-border-default transparent transparent;
+    -fx-border-width: 0 1px 0 0;
+}
+
+.converter-view > .scroll-pane {
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: transparent transparent transparent -color-border-default;
+    -fx-border-width: 0 0 0 1px;
+}
+
+.converter-view > .scroll-pane > .viewport {
+    -fx-background-color: -color-bg-subtle;
+}
+
+.action-bar {
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: -color-border-default transparent transparent transparent;
+    -fx-border-width: 1px 0 0 0;
+}
+
+.card {
+    -fx-background-color: transparent;
+}
+
+/*
+ * Faint diagonal hatching behind the image, so a transparent region reads as "nothing here"
+ * instead of as white. Kept low-contrast: it is a backdrop, not something to look at.
+ */
+.preview-frame {
+    -fx-background-color:
+        -color-bg-inset,
+        linear-gradient(from 0px 0px to 22px 22px, repeat,
+            -color-border-muted 0%, -color-border-muted 3%,
+            transparent 4%, transparent 100%);
+    -fx-background-radius: 6px;
+    -fx-border-color: -color-border-default;
+    -fx-border-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.list-view {
+    -fx-background-color: -color-bg-default;
+    -fx-border-color: -color-border-default;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+}
+
+.flow-pane {
+    -fx-padding: 2px 0 0 0;
+}

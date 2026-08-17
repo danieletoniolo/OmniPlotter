@@ -1,77 +1,81 @@
 package com.github.casiopicture.gui;
 
-import io.github.palexdev.materialfx.layout.ScalableContentPane;
-import io.github.palexdev.materialfx.theming.MaterialFXStylesheets;
-import io.github.palexdev.materialfx.theming.UserAgentBuilder;
+import atlantafx.base.theme.PrimerDark;
+import atlantafx.base.theme.PrimerLight;
 import javafx.application.Application;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
-
+/**
+ * The application window.
+ *
+ * <p>Uses the native window decoration rather than a custom title bar. The previous version drew
+ * its own, which is the single thing that most makes a desktop app look out of place — and it
+ * brought a few hundred lines of hand-rolled resize and drag handling with it.
+ */
 public class CasioPictureApp extends Application {
+
+    /** Called reflectively from {@code Main} so that class carries no JavaFX reference. */
+    public static void launchApp(String[] args) {
+        Application.launch(CasioPictureApp.class, args);
+    }
 
     @Override
     public void start(Stage stage) {
-        try {
-            // Load custom fonts
-            javafx.scene.text.Font.loadFont(getClass().getResourceAsStream("/fonts/Outfit-Regular.ttf"), 14);
-            javafx.scene.text.Font.loadFont(getClass().getResourceAsStream("/fonts/Outfit-SemiBold.ttf"), 14);
-            javafx.scene.text.Font.loadFont(getClass().getResourceAsStream("/fonts/Outfit-Bold.ttf"), 14);
+        Theme.apply(Theme.detectSystemPreference());
 
-            // Load FXML
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/board.fxml"));
-            VBox root = loader.load();
-            
-            // Get the controller
-            BoardController controller = loader.getController();
+        ConverterView view = new ConverterView(stage);
+        Scene scene = new Scene(view, 1180, 760);
+        scene.getStylesheets().add(
+            CasioPictureApp.class.getResource("/casiopicture.css").toExternalForm());
 
-            // Initialize the controller with the stage (configs loaded on-demand per format)
-            controller.initialize(stage);
+        stage.setScene(scene);
+        stage.setTitle("CasioPicture");
+        stage.setMinWidth(900);
+        stage.setMinHeight(620);
+        stage.show();
+    }
 
-            // Apply MaterialFX theme
-            UserAgentBuilder.builder()
-                    .themes(MaterialFXStylesheets.forAssemble(true))
-                    .setDeploy(true)
-                    .setResolveAssets(true)
-                    .build()
-                    .setGlobal();
+    /** Light and dark Primer themes, plus a guess at what the desktop is currently using. */
+    public static final class Theme {
+        private Theme() {}
 
-            // Setup and show stage in custom borderless transparent mode
-            stage.initStyle(javafx.stage.StageStyle.TRANSPARENT);
-            stage.setTitle("CasioPicture - Batch Image Converter");
-            
-            // Create scene with root directly for responsive layout
-            Scene scene = new Scene(root);
-            scene.setFill(javafx.scene.paint.Color.TRANSPARENT);
-            scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
-            
-            stage.setScene(scene);
-            stage.setWidth(1100);
-            stage.setHeight(700);
-            stage.setResizable(true);
-            stage.show();
+        private static boolean dark;
 
-            // Setup custom window resizing helper
-            WindowResizeHelper.addResizeListener(stage);
-        } catch (Exception e) {
-            showError("Failed to load UI: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException(e);
+        public static boolean isDark() {
+            return dark;
         }
-    }
 
-    private void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Error");
-        alert.setHeaderText("Application Error");
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
+        public static void apply(boolean useDark) {
+            dark = useDark;
+            Application.setUserAgentStylesheet(
+                useDark ? new PrimerDark().getUserAgentStylesheet()
+                        : new PrimerLight().getUserAgentStylesheet());
+        }
 
-    public static void main(String[] args) {
-        launch(args);
+        public static void toggle() {
+            apply(!dark);
+        }
+
+        /**
+         * Best effort at the desktop's light/dark setting.
+         *
+         * <p>JavaFX has no portable way to ask, so this reads the one place that is cheap to check
+         * on macOS and falls back to light everywhere else. The user can always toggle.
+         */
+        public static boolean detectSystemPreference() {
+            if (!System.getProperty("os.name", "").toLowerCase().contains("mac")) {
+                return false;
+            }
+            try {
+                Process p = new ProcessBuilder("defaults", "read", "-g", "AppleInterfaceStyle")
+                    .redirectErrorStream(true).start();
+                String out = new String(p.getInputStream().readAllBytes()).trim();
+                p.waitFor();
+                return out.equalsIgnoreCase("Dark");
+            } catch (Exception e) {
+                return false;
+            }
+        }
     }
 }
