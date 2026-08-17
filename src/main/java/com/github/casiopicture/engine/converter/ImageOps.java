@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 /**
  * The image operators the reference drives ImageMagick with, reimplemented in Java.
@@ -516,11 +517,21 @@ public final class ImageOps {
     // --- quantisation -------------------------------------------------------------------------
 
     /**
-     * {@code -colors <n> +dither}: reduces to at most {@code n} colours by median cut, no dithering.
+     * Palette size above which dithering is skipped.
      *
-     * <p>Splits the colour cube along whichever axis of the most populous box spans furthest, until
-     * there are {@code n} boxes, then replaces each box by the mean of the pixels in it. Alpha
-     * participates as a fourth axis so that transparent regions are not merged into opaque ones.
+     * <p>Error diffusion exists to hide banding, and banding needs a coarse palette to appear. Past
+     * a few hundred colours the per-pixel error is around one level and diffusing it changes
+     * nothing anyone can see — while costing a nearest-colour search over the whole palette for
+     * every pixel, which at 65536 colours makes a full-screen conversion take tens of seconds.
+     */
+    private static final int DITHER_PALETTE_LIMIT = 256;
+
+    /**
+     * {@code -colors <n>}: reduces to at most {@code n} colours by median cut.
+     *
+     * <p>Splits the colour cube along whichever box spans furthest on one axis, until there are
+     * {@code n} boxes, then replaces each box by the mean of the pixels in it. Alpha participates
+     * as a fourth axis so that transparent regions are not merged into opaque ones.
      */
     public static BufferedImage quantize(BufferedImage src, int colors, boolean dither) {
         if (colors < 1) {
@@ -537,44 +548,47 @@ public final class ImageOps {
             return src;
         }
 
-        List<Integer> allColors = new ArrayList<>(histogram.keySet());
-        List<Box> boxes = new ArrayList<>();
-        boxes.add(new Box(allColors, histogram));
+        // Largest-range box first. A linear scan for it would make this quadratic in the palette
+        // size, which is ruinous at 65536 colours.
+        PriorityQueue<Box> queue = new PriorityQueue<>((a, b) -> Integer.compare(b.range(), a.range()));
+        queue.add(new Box(new ArrayList<>(histogram.keySet()), histogram));
 
-        while (boxes.size() < colors) {
-            Box widest = null;
-            int at = -1;
-            for (int i = 0; i < boxes.size(); i++) {
-                Box box = boxes.get(i);
-                if (box.colors.size() > 1 && (widest == null || box.range() > widest.range())) {
-                    widest = boxes.get(i);
-                    at = i;
+        List<Box> boxes = new ArrayList<>();
+        while (boxes.size() + queue.size() < colors) {
+            Box widest = queue.poll();
+            if (widest == null) {
+                break;
+            }
+            if (widest.colors.size() <= 1) {
+                boxes.add(widest);   // nothing left to split in this one
+                continue;
+            }
+            queue.addAll(widest.split(histogram));
+        }
+        boxes.addAll(queue);
+
+        boolean useDither = dither && colors <= DITHER_PALETTE_LIMIT;
+
+        if (!useDither) {
+            // Exact per-colour substitution; no search needed.
+            Map<Integer, Integer> mapping = new HashMap<>();
+            for (Box box : boxes) {
+                int mean = box.mean(histogram);
+                for (int color : box.colors) {
+                    mapping.put(color, mean);
                 }
             }
-            if (widest == null) {
-                break;   // every box holds a single colour; nothing left to split
-            }
-            List<Box> split = widest.split(histogram);
-            boxes.remove(at);
-            boxes.addAll(split);
+            return map(src, false, c -> unpack(mapping.get(pack(c))));
         }
 
-        Map<Integer, Integer> mapping = new HashMap<>();
-        for (Box box : boxes) {
-            int mean = box.mean(histogram);
-            for (int color : box.colors) {
-                mapping.put(color, mean);
-            }
-        }
-
+        // Dithering moves pixels off their original colours, so the exact mapping no longer applies
+        // and the nearest chosen colour is used instead.
         List<int[]> chosen = new ArrayList<>();
         for (Box box : boxes) {
             int mean = box.mean(histogram);
             chosen.add(new int[]{(mean >> 16) & 0xFF, (mean >> 8) & 0xFF, mean & 0xFF, (mean >>> 24) & 0xFF});
         }
-        // Dithering moves pixels off their original colours, so the exact histogram mapping no
-        // longer applies and the nearest chosen colour is used instead.
-        return map(src, dither, c -> dither ? nearest(c, chosen) : unpack(mapping.get(pack(c))));
+        return map(src, true, c -> nearest(c, chosen));
     }
 
     private static int pack(int[] c) {
@@ -629,9 +643,14 @@ public final class ImageOps {
             return axis;
         }
 
+        private int range = -1;
+
         int range() {
-            int axis = longestAxis();
-            return max[axis] - min[axis];
+            if (range < 0) {
+                int axis = longestAxis();
+                range = max[axis] - min[axis];
+            }
+            return range;
         }
 
         List<Box> split(Map<Integer, Integer> histogram) {
