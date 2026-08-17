@@ -1,0 +1,17 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from rgb_arr import rgb_array
+
+def draw_rgbarr_image(rgbarr, img):
+  for i in range(len(img) // 4):
+    rgbarr.set(img[i * 4], img[i*4 + 1], img[i*4 + 2], img[i*4 + 3])
+
+#your image data
+#13x7 RGB-888 pixels
+image = b"\a\xff\0\0\6\0\xff\0\5\0\0\xff\4\0\0\xff\3\0\0\xff\2\0\0\xff\1\0\0\xff\0\0\0\xff\17\0\0\xff\16\0\0\xff\r\0\0\xff\f\0\0\xff\v\0\0\xff\n\0\0\xff\t\xff\0\0\b\0\xff\0\27\0\0\xff\26\0\0\xff\25\0\0\xff\24\0\0\xff\23\0\0\xff\22\0\0\xff\21\0\0\xff\20\0\0\xff\37\0\0\xff\36\0\0\xff\35\0\0\xff\34\0\0\xff\33\xff\0\0\32\0\xff\0\31\0\0\xff\30\0\0\xff'\0\0\xff&\0\0\xff%\0\0\xff$\0\0\xff#\0\0\xff\"\0\0\xff!\0\0\xff \0\0\xff/\0\0\xff.\0\0\xff-\xff\0\0,\0\xff\0+\0\0\xff*\0\0\xff)\0\0\xff(\0\0\xff7\0\0\xff6\0\0\xff5\0\0\xff4\0\0\xff3\0\0\xff2\0\0\xff1\0\0\xff0\0\0\xff?\xff\0\0>\0\xff\0=\0\0\xff<\0\0\xff;\0\0\xff:\0\0\xff9\0\0\xff8\0\0\xffG\0\0\xffF\0\0\xffE\0\0\xffD\0\0\xffC\0\0\xffB\0\0\xffA\xff\0\0@\0\xff\0O\0\0\xffN\0\0\xffM\0\0\xffL\0\0\xffK\0\0\xffJ\0\0\xffI\0\0\xffH\0\0\xffW\0\0\xffV\0\0\xffU\0\0\xffT\0\0\xffS\xff\0\0R\0\xff\0Q\0\0\xffP\0\0\xff_\0\0\xff^\0\0\xff]\0\0\xff"
+
+
+#image drawing code sample
+rgbarr = rgb_array()
+draw_rgbarr_image(rgbarr, image)

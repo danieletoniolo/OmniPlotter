@@ -1,0 +1,55 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from gint import drect
+
+#the image drawing function
+#- rle : image RLE-compressed data
+#- w : width of image
+#- pal : palette of colors to use with image
+#- zoomx : horizontal zoom
+#- zoomy : vertical zoom
+#- itransp : index of 1 transparent color in palette or -1 if none
+def draw_image(rle, x0, y0, w, pal, zoomx=1, zoomy=1, itransp=-1):
+  i, x = 0, 0
+  x0, y0 = int(x0), int(y0)
+  nvals = len(pal)
+  nbits = 0
+  nvals -= 1
+  while(nvals):
+    nvals >>= 1
+    nbits += 1
+  maskval = (1 << nbits) - 1
+  maskcnt = (0xFF >> nbits >> 1) << nbits
+  while i<len(rle):
+    v = rle[i]
+    mv = v & maskval
+    c = (v & maskcnt) >> nbits
+    if (v & 0b10000000 or nbits == 8):
+      i += 1
+      c |= rle[i] << (7 - nbits + (nbits == 8))
+    c = c + 1
+    while c:
+      cw = min(c, w - x)
+      if mv != itransp:
+        drect(x0 + x*zoomx, y0, cw*zoomx, zoomy, pal[mv])
+      c -= cw
+      x = (x + cw) % w
+      y0 += x == 0 and zoomy
+    i += 1
+
+
+#palette for your image
+#1 RGB-888 colors
+palette = (
+16,
+)
+
+#your image data
+#1x1 RLE-0 pixels
+image = (
+b"\0"
+)
+
+#image drawing code sample
+draw_image(image, 0, 0, 1, palette, zoomx=1, zoomy=1, itransp=-1)

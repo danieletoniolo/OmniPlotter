@@ -1,0 +1,55 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from gint import drect
+
+#the image drawing function
+#- rle : image RLE-compressed data
+#- w : width of image
+#- pal : palette of colors to use with image
+#- zoomx : horizontal zoom
+#- zoomy : vertical zoom
+#- itransp : index of 1 transparent color in palette or -1 if none
+def draw_image(rle, x0, y0, w, pal, zoomx=1, zoomy=1, itransp=-1):
+  i, x = 0, 0
+  x0, y0 = int(x0), int(y0)
+  nvals = len(pal)
+  nbits = 0
+  nvals -= 1
+  while(nvals):
+    nvals >>= 1
+    nbits += 1
+  maskval = (1 << nbits) - 1
+  maskcnt = (0xFF >> nbits >> 1) << nbits
+  while i<len(rle):
+    v = rle[i]
+    mv = v & maskval
+    c = (v & maskcnt) >> nbits
+    if (v & 0b10000000 or nbits == 8):
+      i += 1
+      c |= rle[i] << (7 - nbits + (nbits == 8))
+    c = c + 1
+    while c:
+      cw = min(c, w - x)
+      if mv != itransp:
+        drect(x0 + x*zoomx, y0, cw*zoomx, zoomy, pal[mv])
+      c -= cw
+      x = (x + cw) % w
+      y0 += x == 0 and zoomy
+    i += 1
+
+
+#palette for your image
+#96 RGB-888 colors
+palette = (
+42287,17758,10847,63323,16648,21074,36826,28308,28452,12202,46946,33809,2554,49679,25404,25600,28864,59017,43698,65222,44300,13013,37453,36081,1805,33285,19478,53758,45732,28612,36276,37200,12103,53640,10368,7000,51568,12567,59880,54919,13984,42968,44054,61252,33178,1909,50150,47055,26203,47662,24286,50887,8710,48822,19827,18237,1595,56745,62707,22101,18248,1320,59151,13342,43993,13143,32040,18735,38240,56411,32004,31248,30793,2054,4156,25758,36323,43883,31786,54412,27643,38431,37182,9279,19674,46276,2531,49565,36699,47302,36090,3469,27824,7170,45726,17266,
+)
+
+#your image data
+#12x8 RLE-7 pixels
+image = (
+b"\x80\0\x81\0\x82\0\x83\0\x84\0\x85\0\x86\0\x87\0\x88\0\x89\0\x8a\0\x8b\0\x8c\0\x8d\0\x8e\0\x8f\0\x90\0\x91\0\x92\0\x93\0\x94\0\x95\0\x96\0\x97\0\x98\0\x99\0\x9a\0\x9b\0\x9c\0\x9d\0\x9e\0\x9f\0\xa0\0\xa1\0\xa2\0\xa3\0\xa4\0\xa5\0\xa6\0\xa7\0\xa8\0\xa9\0\xaa\0\xab\0\xac\0\xad\0\xae\0\xaf\0\xb0\0\xb1\0\xb2\0\xb3\0\xb4\0\xb5\0\xb6\0\xb7\0\xb8\0\xb9\0\xba\0\xbb\0\xbc\0\xbd\0\xbe\0\xbf\0\xc0\0\xc1\0\xc2\0\xc3\0\xc4\0\xc5\0\xc6\0\xc7\0\xc8\0\xc9\0\xca\0\xcb\0\xcc\0\xcd\0\xce\0\xcf\0\xd0\0\xd1\0\xd2\0\xd3\0\xd4\0\xd5\0\xd6\0\xd7\0\xd8\0\xd9\0\xda\0\xdb\0\xdc\0\xdd\0\xde\0_"
+)
+
+#image drawing code sample
+draw_image(image, 0, 0, 12, palette, zoomx=1, zoomy=1, itransp=-1)

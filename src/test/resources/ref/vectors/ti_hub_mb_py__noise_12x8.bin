@@ -1,0 +1,20 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from ti_hub import send
+
+#function to send the micro:bit Python code to run
+def send_microbit(cmd):
+  send("\x04")
+  send(cmd)
+  send("\x05")
+
+def draw_mb_image(img):
+  send_microbit('display.show(Image("'+img+'"))')
+
+#your image data
+#12x8 10-shades of gray pixels
+image = "336186021014:775482613663:174760371785:787210417150:271172312332:131455383437:999425445284:447718334465"
+
+#image drawing code sample
+draw_mb_image(image)

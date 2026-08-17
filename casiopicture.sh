@@ -48,6 +48,18 @@ case "${COMMAND}" in
         echo "Running tests..."
         mvn test "$@"
         ;;
+    refgen)
+        if ! command -v node >/dev/null 2>&1; then
+            echo "Error: Node.js is required to regenerate the reference vectors."
+            exit 1
+        fi
+        if [ ! -f "${SCRIPT_DIR}/tmp/index.html" ]; then
+            echo "Error: tmp/index.html (the img2calc reference) is missing."
+            exit 1
+        fi
+        echo "Regenerating reference vectors from tmp/index.html..."
+        node "${SCRIPT_DIR}/tools/refgen/refgen.mjs"
+        ;;
     *)
         echo "Usage: $0 {build|run|run-jar|cli|test}"
         echo "  build         - Compile and package the application using local JDK & Maven"
@@ -55,6 +67,7 @@ case "${COMMAND}" in
         echo "  run-jar       - Run the GUI application from the shaded JAR file"
         echo "  cli [args]    - Run the CLI application with arguments"
         echo "  test [args]   - Run unit/integration tests with arguments"
+        echo "  refgen        - Regenerate the golden reference vectors from tmp/index.html"
         echo ""
         echo "Example: Run conversion via CLI:"
         echo "  $0 cli -f cp.g3p test_simple_384x192.png -o output.g3p"

@@ -1,0 +1,62 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from casioplot import set_pixel
+
+
+#the image drawing function
+#- rle : image RLE-compressed data
+#- w : width of image
+#- pal : palette of colors to use with image
+#- zoomx : horizontal zoom
+#- zoomy : vertical zoom
+#- itransp : index of 1 transparent color in palette or -1 if none
+def draw_image(rle, x0, y0, w, pal, zoomx=1, zoomy=1, itransp=-1):
+  i, x = 0, 0
+  x0, y0 = int(x0), int(y0)
+  nvals = len(pal)
+  nbits = 0
+  nvals -= 1
+  while(nvals):
+    nvals >>= 1
+    nbits += 1
+  maskval = (1 << nbits) - 1
+  maskcnt = (0xFF >> nbits >> 1) << nbits
+  while i<len(rle):
+    v = rle[i]
+    mv = v & maskval
+    c = (v & maskcnt) >> nbits
+    if (v & 0b10000000 or nbits == 8):
+      i += 1
+      c |= rle[i] << (7 - nbits + (nbits == 8))
+    c = c + 1
+    while c:
+      cw = min(c, w - x)
+      if mv != itransp:
+        col = pal[mv]
+        for l in range(0, zoomy, zoomy < 0 and -1 or 1):
+          for k in range(cw):
+            for p in range(0, zoomx, zoomx < 0 and -1 or 1):
+              set_pixel(x0 + (x + k)*zoomx + p - (zoomx < 0), y0 + l - (zoomy < 0), col)
+      c -= cw
+      x = (x + cw) % w
+      y0 += x == 0 and zoomy
+    i += 1
+
+
+#palette for your image
+#3 RGB-888 colors
+palette = (
+(248,0,0),(0,252,0),(0,0,248),
+)
+
+#your image data
+#12x8 RLE-2 pixels
+image = (
+b"\0\1*\0\1*\0\1*\0\1*\0\1*\0\1*\0\1*\0\1\n"
+)
+
+#image drawing code sample
+from casioplot import show_screen
+draw_image(image, 0, 0, 12, palette, zoomx=1, zoomy=1, itransp=-1)
+show_screen()

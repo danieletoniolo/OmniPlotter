@@ -1,0 +1,17 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from rgb_arr import rgb_array
+
+def draw_rgbarr_image(rgbarr, img):
+  for i in range(len(img) // 4):
+    rgbarr.set(img[i * 4], img[i*4 + 1], img[i*4 + 2], img[i*4 + 3])
+
+#your image data
+#13x7 RGB-888 pixels
+image = b"\5+@\xc8\4@@\xc8\1\x80@\xc8\0\x95@\xc8\r\xd5@\xc8\f\xea@\xc8\b+@\xc8\27@@\xc8\24\x80@\xc8\23\x95@\xc8\20\xd5@\xc8\37\xea@\xc8\35\0@\xc8\34\25@\xc8\31U@\xc8\30j@\xc8%\xaa@\xc8$\xbf@\xc8!\xff@\xc8 \0@\xc8/\25@\xc8,U@\xc8+j@\xc8(\xaa@\xc87\xbf@\xc84\xff@\xc81+@\xc80@@\xc8=\x80@\xc8<\x95@\xc89\xd5@\xc88\xea@\xc8D+@\xc8C@@\xc8@\x80@\xc8O\x95@\xc8L\xd5@\xc8K\xea@\xc8I\0@\xc8H\25@\xc8UU@\xc8Tj@\xc8Q\xaa@\xc8P\xbf@\xc8]\xff@\xc8"
+
+
+#image drawing code sample
+rgbarr = rgb_array()
+draw_rgbarr_image(rgbarr, image)

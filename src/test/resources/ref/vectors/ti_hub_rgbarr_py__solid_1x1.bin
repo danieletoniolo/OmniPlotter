@@ -1,0 +1,17 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from rgb_arr import rgb_array
+
+def draw_rgbarr_image(rgbarr, img):
+  for i in range(len(img) // 4):
+    rgbarr.set(img[i * 4], img[i*4 + 1], img[i*4 + 2], img[i*4 + 3])
+
+#your image data
+#1x1 RGB-888 pixels
+image = b"\a \x80\xc0"
+
+
+#image drawing code sample
+rgbarr = rgb_array()
+draw_rgbarr_image(rgbarr, image)

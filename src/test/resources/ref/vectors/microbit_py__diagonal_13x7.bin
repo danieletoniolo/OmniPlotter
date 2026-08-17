@@ -1,0 +1,15 @@
+#image converted on TI-Planet
+#tiplanet.org/img2calc
+
+from microbit import *
+from mb_disp import display, Image
+
+def draw_mb_image(img):
+  display.show(Image(img))
+
+#your image data
+#13x7 10-shades of gray pixels
+image = "9099999999999:9909999999999:9990999999999:9999099999999:9999909999999:9999990999999:9999999099999"
+
+#image drawing code sample
+draw_mb_image(image)
