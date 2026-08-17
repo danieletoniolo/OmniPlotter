@@ -41,7 +41,10 @@ build/
 ## Other ###
 /.vscode/
 /debug_tools/
-/tools/
+
+### Downloaded toolchain (recreated by ./setup.sh). tools/refgen is source and stays tracked. ###
+/tools/jdk/
+/tools/maven/
 
 ### img2calc reference (kept: refgen.mjs reads it to regenerate golden vectors) ###
 ### The 4 MB ImageMagick WASM build is not needed for that, so it stays out.  ###
