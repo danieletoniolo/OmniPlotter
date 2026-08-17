@@ -1,23 +1,34 @@
 package com.github.casiopicture.engine.converter;
 
-import java.awt.Color;
-import java.awt.image.IndexColorModel;
-import java.util.List;
+import com.github.casiopicture.engine.util.Palette;
 
-public class IndexColorModelFactory {
-    public static IndexColorModel create(List<Color> colors) {
-        int size = colors.size();
+import java.awt.image.IndexColorModel;
+
+public final class IndexColorModelFactory {
+
+    private IndexColorModelFactory() {}
+
+    /**
+     * Builds an {@link IndexColorModel} over a palette, alpha included.
+     *
+     * <p>Alpha is not optional here: {@code pal8ci.png} carries the same RGB twice, once
+     * transparent and once opaque, and dropping alpha would collapse two distinct indices into one.
+     */
+    public static IndexColorModel create(Palette palette) {
+        int size = palette.size();
         byte[] r = new byte[size];
         byte[] g = new byte[size];
         byte[] b = new byte[size];
+        byte[] a = new byte[size];
 
         for (int i = 0; i < size; i++) {
-            Color color = colors.get(i);
-            r[i] = (byte) color.getRed();
-            g[i] = (byte) color.getGreen();
-            b[i] = (byte) color.getBlue();
+            int[] c = palette.get(i);
+            r[i] = (byte) c[0];
+            g[i] = (byte) c[1];
+            b[i] = (byte) c[2];
+            a[i] = (byte) c[3];
         }
 
-        return new IndexColorModel(8, size, r, g, b);
+        return new IndexColorModel(8, size, r, g, b, a);
     }
 }

@@ -32,7 +32,7 @@ public interface FileEncoder {
      *         - {@link TIZ80Encoder} for TI calculator formats (TI_8XV, TI_8CA, TI_8CI, TI_8XI, TI_83I, TI_73I, TI_82I, TI_85I, TI_86I)
      *         - {@link PythonEncoder} for Python-based formats (TI_GRAPHICS_PY, TI_DRAW_CE_PY, KANDINSKY_PY, CASIO_PICTURE_PY, MICROBIT_PY, HPPRIME_PY, and others)
      *         - {@link CasioPictureEncoder} for Casio picture formats (C2P, CP_G3P, CP01_G3P, CP01_G4P, and their indexed variants)
-     *         - {@link ZeroEncoder} for ZERO_BIN format
+     *         - {@link ZeroEncoder} for ZPIC format
      * @throws IllegalArgumentException if the format is not supported or recognized
      */
     static FileEncoder getEncoder(Format format) {
@@ -43,7 +43,7 @@ public interface FileEncoder {
                 -> PythonEncoder.getInstance();
             case C2P, CP_G3P, CP01_G3P, CP01_G4P, I_C2P, CP_I_G3P, CP01_I_G3P, CP01_I_G4P
                 -> CasioPictureEncoder.getInstance();
-            case ZERO_BIN
+            case ZPIC
                 -> ZeroEncoder.getInstance();
         };
     }

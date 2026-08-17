@@ -1,12 +1,8 @@
 package com.github.casiopicture.engine.util;
 
-import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,28 +12,6 @@ public final class EncoderUtils {
 
     private EncoderUtils() {
         // Private constructor to prevent instantiation
-    }
-
-    /**
-     * Loads a color palette from an image resource file.
-     * Reads the first row of pixels from left to right.
-     *
-     * @param resourceName The name of the resource file (e.g., "palcp.png").
-     * @return A list of Colors representing the palette.
-     * @throws IOException if the resource cannot be found or read.
-     */
-    public static List<Color> loadPalette(String resourceName) throws IOException {
-        List<Color> palette = new ArrayList<>();
-        try (InputStream is = EncoderUtils.class.getClassLoader().getResourceAsStream(resourceName)) {
-            if (is == null) {
-                throw new IOException("Palette resource not found: " + resourceName);
-            }
-            BufferedImage paletteImage = ImageIO.read(is);
-            for (int i = 0; i < paletteImage.getWidth(); i++) {
-                palette.add(new Color(paletteImage.getRGB(i, 0)));
-            }
-        }
-        return palette;
     }
 
     /**
@@ -157,30 +131,6 @@ public final class EncoderUtils {
             // Swap: lower n1 bits move up by n2, upper n2 bits move down by n1
             arr[i] = (byte)(((b & mask1) << n2) | ((b & mask2) >> n1));
         }
-    }
-
-    /**
-     * Finds the index of the nearest color in a palette.
-     *
-     * @param color   The color to match.
-     * @param palette The list of available colors.
-     * @return The index of the closest color in the palette.
-     */
-    public static int findNearestPaletteIndex(Color color, List<Color> palette) {
-        int nearestIndex = -1;
-        double minDistance = Double.MAX_VALUE;
-
-        for (int i = 0; i < palette.size(); i++) {
-            Color paletteColor = palette.get(i);
-            double distance = Math.pow(color.getRed() - paletteColor.getRed(), 2)
-                            + Math.pow(color.getGreen() - paletteColor.getGreen(), 2)
-                            + Math.pow(color.getBlue() - paletteColor.getBlue(), 2);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestIndex = i;
-            }
-        }
-        return nearestIndex;
     }
 
     /**

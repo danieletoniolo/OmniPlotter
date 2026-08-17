@@ -4,6 +4,7 @@ import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.ConversionResult;
 import com.github.casiopicture.engine.data.Format;
 import com.github.casiopicture.engine.util.EncoderUtils;
+import com.github.casiopicture.engine.util.PixelBuffer;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -34,51 +35,48 @@ public class ZeroEncoder implements FileEncoder {
 
     @Override
     public ConversionResult encode(BufferedImage image, Format format, String originalFileName, ConversionOptions options) throws IOException {
-        if (format != Format.ZERO_BIN) {
+        if (format != Format.ZPIC) {
             throw new IllegalArgumentException("Unsupported format for ZeroEncoder: " + format);
         }
 
-        int width = image.getWidth();
-        int height = image.getHeight();
+        PixelBuffer px = PixelBuffer.of(image);
         ByteArrayOutputStream pixelData = new ByteArrayOutputStream();
 
+        // The format is a list of draw-pixel commands rather than a raster, so fully transparent
+        // pixels are simply left out and the drawing shows through.
+        //
+        // Coordinates advance against the *requested* canvas width, not the image's own: when the
+        // preprocessed image is narrower than the target canvas, the reference still wraps at the
+        // canvas edge, which shears the picture. Reproduced deliberately.
+        int wrapWidth = options.width() > 0 ? options.width() : px.width();
+        int x = 0;
+        int y = 22;   // the first drawable row on the device
         int n = 0;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int argb = image.getRGB(x, y);
-                int a = (argb >> 24) & 0xFF;
-                // Only include non-transparent pixels (Alpha >= 255)
-                if (a >= 255) {
-                    n++;
-                    int r = (argb >> 16) & 0xFF;
-                    int g = (argb >> 8) & 0xFF;
-                    int b = argb & 0xFF;
 
-                    // Pack color to RGB565: RRRRRGGGGGGBBBBB (little-endian)
-                    int color = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
-
-                    // 10-byte structure per pixel
-                    pixelData.write(0x0E);
-                    pixelData.write(0);
-                    pixelData.write(0);
-                    pixelData.write(0);
-                    
-                    // Coordinates (X, Y starting at row 22)
-                    pixelData.write(x & 0xFF);
-                    pixelData.write((x >> 8) & 0xFF);
-                    int fileY = y + 22;
-                    pixelData.write(fileY & 0xFF);
-                    pixelData.write((fileY >> 8) & 0xFF);
-                    
-                    // Color
-                    pixelData.write(color & 0xFF);
-                    pixelData.write((color >> 8) & 0xFF);
-                }
+        for (int i = 0; i < px.size(); i++) {
+            int[] raw = px.raw(i);
+            if (raw != null && raw[3] >= 255) {
+                n++;
+                int color = px.packed(i, 5, 6, 5, 0);
+                pixelData.write(0x0E);
+                pixelData.write(0);
+                pixelData.write(0);
+                pixelData.write(0);
+                pixelData.write(x & 0xFF);
+                pixelData.write((x >> 8) & 0xFF);
+                pixelData.write(y & 0xFF);
+                pixelData.write((y >> 8) & 0xFF);
+                pixelData.write(color & 0xFF);
+                pixelData.write((color >> 8) & 0xFF);
+            }
+            x = (x + 1) % wrapWidth;
+            if (x == 0) {
+                y++;
             }
         }
 
         ByteArrayOutputStream resultStream = new ByteArrayOutputStream();
-        // 8-byte header: marker [0x32, 0, 0, 0] + 4-byte count of valid pixels
+        // 8-byte header: marker [0x32, 0, 0, 0] then the number of pixel commands that follow.
         resultStream.write(0x32);
         resultStream.write(0);
         resultStream.write(0);
@@ -86,7 +84,7 @@ public class ZeroEncoder implements FileEncoder {
         resultStream.write(EncoderUtils.intToLittleEndian(n, 4));
         resultStream.write(pixelData.toByteArray());
 
-        String baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
-        return new ConversionResult(resultStream.toByteArray(), baseName + ".bin");
+        // Slot-numbered on the device, and the file carries no extension.
+        return new ConversionResult(resultStream.toByteArray(), "pic1");
     }
 }

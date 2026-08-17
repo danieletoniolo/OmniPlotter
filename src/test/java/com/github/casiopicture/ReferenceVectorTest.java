@@ -148,7 +148,9 @@ public class ReferenceVectorTest {
         byte[] actual = result.fileBytes();
 
         if (!java.util.Arrays.equals(expected, actual)) {
-            fail(diff(expected, actual));
+            // Surefire reports dynamic tests under the factory method name, so the vector id has to
+            // travel in the message or a failure is untraceable.
+            fail(v.id() + " [" + v.vector().getFileName() + "]\n" + diff(expected, actual));
         }
     }
 

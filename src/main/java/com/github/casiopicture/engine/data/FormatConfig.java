@@ -44,7 +44,7 @@ public record FormatConfig(
         Map.entry(Format.CP_I_G3P, new FormatConfig(384, 192, true, 384, 192, 8)),
         Map.entry(Format.CP01_I_G3P, new FormatConfig(384, 192, true, 384, 192, 8)),
         Map.entry(Format.CP01_I_G4P, new FormatConfig(384, 192, true, 384, 192, 8)),
-        Map.entry(Format.ZERO_BIN, new FormatConfig(128, 64, false, 128, 64, 2))
+        Map.entry(Format.ZPIC, new FormatConfig(128, 64, false, 128, 64, 2))
     );
 
     /**

@@ -37,7 +37,7 @@ public enum Format {
     CP_I_G3P("cp_i.g3p"),
     CP01_I_G3P("cp01_i.g3p"),
     CP01_I_G4P("cp01_i.g4p"),
-    ZERO_BIN("zero.bin");
+    ZPIC("zpic");
 
     /**
      * The format string identifier.

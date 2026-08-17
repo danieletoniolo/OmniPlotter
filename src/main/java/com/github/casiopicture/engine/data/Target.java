@@ -113,7 +113,7 @@ public enum Target {
 
     // Zero Calculators
     ZERO("zero", "ZGC1 | ZGC2 | ZGC3 | ZGC4",
-        List.of(Format.ZERO_BIN), Format.ZERO_BIN,
+        List.of(Format.ZPIC), Format.ZPIC,
         List.of(), null);
 
     private final String id;

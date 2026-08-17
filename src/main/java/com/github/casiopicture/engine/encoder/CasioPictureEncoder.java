@@ -4,14 +4,13 @@ import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.ConversionResult;
 import com.github.casiopicture.engine.data.Format;
 import com.github.casiopicture.engine.util.EncoderUtils;
+import com.github.casiopicture.engine.util.Palette;
+import com.github.casiopicture.engine.util.PixelBuffer;
 
-import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.zip.Adler32;
 import java.util.zip.Deflater;
 
 public class CasioPictureEncoder implements FileEncoder {
@@ -56,43 +55,33 @@ public class CasioPictureEncoder implements FileEncoder {
     }
 
     private byte[] extractColorPixels(BufferedImage image) {
-        int width = image.getWidth();
-        int height = image.getHeight();
+        PixelBuffer px = PixelBuffer.of(image);
         ByteArrayOutputStream pixelData = new ByteArrayOutputStream();
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int argb = image.getRGB(x, y);
-                int r = (argb >> 16) & 0xFF;
-                int g = (argb >> 8) & 0xFF;
-                int b = argb & 0xFF;
-                
-                // Pack to RGB565: RRRRRGGGGGGBBBBB (big-endian)
-                int color = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
-                pixelData.write((color >> 8) & 0xFF);
-                pixelData.write(color & 0xFF);
-            }
+        for (int i = 0; i < px.size(); i++) {
+            // RGB-565, big-endian.
+            int color = px.packed(i, 5, 6, 5, 0);
+            pixelData.write((color >> 8) & 0xFF);
+            pixelData.write(color & 0xFF);
         }
         return pixelData.toByteArray();
     }
 
     private byte[] extractIndexedPixels(BufferedImage image) throws IOException {
-        int width = image.getWidth();
-        int height = image.getHeight();
+        PixelBuffer px = PixelBuffer.of(image);
+        Palette palette = Palette.load("palcp.png");
         ByteArrayOutputStream pixelData = new ByteArrayOutputStream();
-        List<Color> palette = EncoderUtils.loadPalette("palcp.png");
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x += 2) {
-                Color c1 = new Color(image.getRGB(x, y));
-                int idx1 = EncoderUtils.findNearestPaletteIndex(c1, palette);
-                int idx2 = 0;
-                if (x + 1 < width) {
-                    Color c2 = new Color(image.getRGB(x + 1, y));
-                    idx2 = EncoderUtils.findNearestPaletteIndex(c2, palette);
-                }
-                pixelData.write((idx1 << 4) | idx2);
+        // Two pixels per byte, walked as one flat run rather than row by row: on an odd width the
+        // reference pairs the last pixel of a row with the first of the next, and on an odd pixel
+        // count the final pair reads past the end. There `nearest` answers -1, and `x | -1` is -1,
+        // so the byte written is 0xFF. Both behaviours are load-bearing for byte equality.
+        for (int i = 0; i < px.size(); i += 2) {
+            int icolor = 0;
+            for (int j = 0; j < 2; j++) {
+                icolor = (icolor << 4) | palette.nearest(px.raw(i + j));
             }
+            pixelData.write(icolor);
         }
         return pixelData.toByteArray();
     }

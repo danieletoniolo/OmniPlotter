@@ -2,7 +2,8 @@ package com.github.casiopicture.engine.converter;
 
 import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.Format;
-import com.github.casiopicture.engine.util.EncoderUtils;
+import com.github.casiopicture.engine.util.Palette;
+import com.github.casiopicture.engine.util.PixelBuffer;
 import org.imgscalr.Scalr;
 
 import javax.imageio.ImageIO;
@@ -25,7 +26,7 @@ public class ImagePreprocessor {
 
     private static final Set<Format> MONOCHROME_WITH_FLATTEN_FORMATS = EnumSet.of(
         Format.TI_8XI, Format.TI_83I, Format.TI_73I, Format.TI_82I,
-        Format.TI_85I, Format.TI_86I, Format.ZERO_BIN
+        Format.TI_85I, Format.TI_86I, Format.ZPIC
     );
 
     private static final Set<Format> MONOCHROME_SIMPLE_FORMATS = EnumSet.of(
@@ -163,18 +164,14 @@ public class ImagePreprocessor {
      * Remaps an image to the TI-8CI fixed palette.
      */
     private static BufferedImage remapToPalette(BufferedImage source) throws IOException {
-        List<Color> palette = EncoderUtils.loadPalette("pal8ci.png");
+        Palette palette = Palette.load("pal8ci.png");
 
         BufferedImage remapped = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_BYTE_INDEXED, IndexColorModelFactory.create(palette));
         byte[] pixels = ((DataBufferByte) remapped.getRaster().getDataBuffer()).getData();
-        int width = source.getWidth();
+        PixelBuffer px = PixelBuffer.of(source);
 
-        for (int y = 0; y < source.getHeight(); y++) {
-            for (int x = 0; x < source.getWidth(); x++) {
-                Color sourceColor = new Color(source.getRGB(x, y));
-                int bestFitIndex = EncoderUtils.findNearestPaletteIndex(sourceColor, palette);
-                pixels[y * width + x] = (byte) bestFitIndex;
-            }
+        for (int i = 0; i < px.size(); i++) {
+            pixels[i] = (byte) palette.nearest(px.raw(i));
         }
         return remapped;
     }
