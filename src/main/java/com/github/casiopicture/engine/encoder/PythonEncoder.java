@@ -38,13 +38,13 @@ public class PythonEncoder implements FileEncoder {
         String varName = originalFileName.substring(0, originalFileName.lastIndexOf('.')).replaceAll("[^a-zA-Z0-9_]", "_");
 
         return switch (format) {
-            case TI_GRAPHICS_PY, KANDINSKY_PY, CASIO_PICTURE_PY, TI_DRAW_CE_PY, TI_DRAW_CX_PY -> encodePythonRLE(image, format, varName);
-            case CASIOPLOT_CG_PY -> encodeCasioPlot(image, varName);
-            case GRAPHIC_G3_PY, GRAPHIC_CG_PY -> encodeGraphic(image, "graphic", varName);
+            case TI_GRAPHICS_PY, KANDINSKY_PY, KANDINSKY_CG_PY, TI_DRAW_CE_PY, TI_DRAW_CX_PY -> encodePythonRLE(image, format, varName);
+            case CASIOPLOT_CG_PY, CASIOPLOT_G3_PY -> encodeCasioPlot(image, varName);
+            case GRAPHIC_G3_PY, GRAPHIC_CG_PY, GRAPHIC_PY, GRAPHIC_NS_PY -> encodeGraphic(image, "graphic", varName);
             case GINT_G3_PY, GINT_CG_PY -> encodeGraphic(image, "gint", varName);
             case NSP_CX_PY, NSP_NS_PY -> encodeGraphic(image, "nsp", varName);
             case HPPRIME_PY -> encodeGraphic(image, "hpprime", varName);
-            case MICROBIT_PY, MICROBIT_SMALL_PY -> encodePythonMB(image, format);
+            case MICROBIT_PY, TI_HUB_MB_PY -> encodePythonMB(image, format);
             case TI_HUB_RGBARR_PY -> encodePythonRGBArr(image, varName);
             default -> throw new IllegalArgumentException("Unsupported format for PythonEncoder: " + format);
         };

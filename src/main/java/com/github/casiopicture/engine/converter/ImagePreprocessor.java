@@ -30,7 +30,7 @@ public class ImagePreprocessor {
     );
 
     private static final Set<Format> MONOCHROME_SIMPLE_FORMATS = EnumSet.of(
-        Format.MICROBIT_PY, Format.MICROBIT_SMALL_PY,
+        Format.MICROBIT_PY, Format.TI_HUB_MB_PY,
         Format.GRAPHIC_G3_PY, Format.GINT_G3_PY, Format.NSP_NS_PY
     );
 

@@ -44,7 +44,7 @@ public class Cli implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         // Load format-specific configuration to get defaults
-        FormatConfig config = FormatConfig.getFormatConfiguration(format);
+        FormatConfig config = FormatConfig.of(format);
         if (config == null) {
             System.err.println("Error: Unsupported format '" + format + "'.");
             // You could add a command to list available formats.

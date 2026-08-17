@@ -372,7 +372,7 @@ public class BoardController {
             metaTypeLabel.setText(format);
         }
 
-        FormatConfig config = FormatConfig.getFormatConfiguration(format);
+        FormatConfig config = FormatConfig.of(format);
         if (config == null) {
             return;
         }

@@ -60,7 +60,7 @@ public class EngineApi {
     ) throws Exception {
 
         // Load the configuration for the format (used for validation)
-        FormatConfig config = FormatConfig.getFormatConfiguration(format);
+        FormatConfig config = FormatConfig.of(format);
         if (config == null) {
             throw new IllegalArgumentException("Unsupported format: " + format);
         }
