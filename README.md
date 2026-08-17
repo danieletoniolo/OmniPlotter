@@ -1,68 +1,98 @@
-# CasioPicture - Standalone Portable Run Environment
+# CasioPicture
 
-This project contains the Java implementation of **web image convert** (converting images to calculator formats like Casio `.g3p` and TI-Python format). It has been migrated from an IntelliJ-dependent setup to a completely standalone, portable execution environment.
+A desktop app that converts images into the picture and script formats graphing calculators can
+open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` / `.8ca` / `.8ci` / `.8xi` and friends, the Zero
+`pic`, and the Python generators for kandinsky, casioplot, gint, ti_draw, nsp and hpprime.
 
----
+It is a native port of [TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), with both a
+window and a command line.
 
-## Quick Start
-
-### 1. Initialize the Environment
-Run the setup script. It will detect your Mac's CPU architecture (Intel or Apple Silicon), download and unpack JDK 17 and Apache Maven 3.9.6 locally into the `tools/` folder, and generate a workspace runner script (`casiopicture.sh`).
+## Getting started
 
 ```bash
-chmod +x setup.sh
 ./setup.sh
 ```
 
-### 2. Build the Application
-Use the local runner script to build the project. This compiles the code and bundles all the required dependencies (such as MaterialFX and imgscalr) into a single shaded fat JAR.
+Downloads a JDK and Maven into `tools/` and resolves every dependency into `.mvn/repo` and `libs/`.
+Nothing is installed system-wide and your `~/.m2` is never touched, so the checkout is
+self-contained and safe to delete.
 
 ```bash
-./casiopicture.sh build
+./casiopicture.sh run          # open the app
+./casiopicture.sh cli --help   # command line
+./casiopicture.sh test         # test suite
+./casiopicture.sh package      # native installer for this platform
 ```
 
----
+## Command line
 
-## Running the Application
-
-The runner script (`./casiopicture.sh`) handles setting up `JAVA_HOME` and paths on the fly. It supports the following commands:
-
-### Command-Line Interface (CLI)
-To run the CLI tool to convert an image:
 ```bash
-./casiopicture.sh cli -f <format> <input-image> -o <output-file>
-```
-*Example:*
-```bash
-./casiopicture.sh cli -f cp.g3p test_simple_384x192.png -o test_output.g3p
-```
-
-To see CLI help:
-```bash
-./casiopicture.sh cli --help
+casiopicture convert photo.png -f cp.g3p --name PICT1
+casiopicture convert *.jpg -f kandinsky.py -o ./out
+casiopicture formats --target cg
+casiopicture targets --mode var
+casiopicture inspect PICT1.g3p
 ```
 
-### Graphical User Interface (GUI)
-You can launch the JavaFX/MaterialFX GUI in two ways:
+Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
+tool translates directly into a command here.
 
-1. **Direct Dev Mode (via JavaFX Maven plugin):**
-   ```bash
-   ./casiopicture.sh run
-   ```
-2. **Packaged JAR Mode (runs the shaded fat JAR):**
-   ```bash
-   ./casiopicture.sh run-jar
-   ```
+`inspect` reads a Casio file back apart — un-inverts the header, checks the sizes recorded in
+different places against each other, undoes the CP obfuscation and inflates the pixel data. That is
+the question that actually matters: whether the calculator will open the file.
 
-### Running Tests
-To run unit and integration tests using the local environment:
-```bash
-./casiopicture.sh test
+## Correctness
+
+These containers carry the same length in several places plus checksums derived from it. One wrong
+byte and the calculator refuses the file, with no indication of why. So the conversion is checked
+against the original rather than reasoned about:
+
+`tools/refgen/refgen.mjs` contains the img2calc encoders transcribed from `tmp/index.html` as
+literally as possible, and generates **591 golden vectors** — every format, across a range of sizes
+(including deliberately awkward ones: 1×1, odd widths, sizes that are not multiples of 8) and pixel
+patterns. `ReferenceVectorTest` feeds the Java encoders the identical pixels and asserts byte
+equality.
+
+**All 591 match.** Regenerate them with `./casiopicture.sh refgen` after touching the reference.
+
+That covers the encoders, which turn pixels into a file. The stage before it — resizing, colour
+reduction, palette remapping — is ImageMagick in the reference and reimplemented in Java here, so it
+cannot match bit for bit. `PreprocessingParityTest` runs a real ImageMagick with the reference's
+exact arguments and compares: same canvas, same colour count, and pixels close enough that the
+picture is visibly the same. It skips itself if ImageMagick is not installed.
+
+A few of those operators do not do the obvious thing, and the code says so where it matters:
+`-depth 5` rescales to 32 evenly spread levels rather than masking off low bits, `-extent` defaults
+to opaque white, `-channel` keeps applying to later operators, and `-posterize` and `-colors` dither
+unless `+dither` was passed.
+
+## Layout
+
+```
+src/main/java/com/github/casiopicture/
+  Main.java              arguments mean CLI, none means UI
+  cli/                   convert, formats, targets, inspect
+  gui/                   JavaFX window
+  engine/
+    EngineApi            the one conversion path both faces use
+    converter/           ImageOps (the ImageMagick operators), ImagePreprocessor (per-format pipeline)
+    encoder/             CasioPicture, TIZ80, Python, Zero
+    data/                Format, Target, FormatConfig, ConversionOptions
+    inspect/             reads Casio files back apart
+    util/                PixelBuffer, Palette, ByteSeq, EncoderUtils
+tools/refgen/            the reference encoders and the golden-vector generator
+tmp/                     img2calc itself, kept so the vectors can be regenerated
 ```
 
----
+## Notes
 
-## Technical Details
+- The preview in the window is the actual preprocessed image, not a scaled-down source, so
+  quantisation and dithering are visible before anything is written.
+- Some behaviour is faithfully odd because the reference is: the TI checksum sums untruncated values
+  while the file stores truncated bytes, `im8c` drops literal pixels still buffered when the image
+  ends, and `zpic` wraps on the canvas width rather than the image width. These are reproduced
+  deliberately — the goal is files that behave exactly like img2calc's.
 
-- **Local Tools Directory:** All tools (JDK 17 and Apache Maven) are stored inside the project workspace directory under `tools/` to keep the user's global system environment clean and unmodified.
-- **JAR Launcher:** Non-modular JavaFX applications packaged in a shaded fat JAR will throw an initialization error if the main class extends `javafx.application.Application` without modules on the module path. To prevent this, we added [Launcher.java](file:///Users/toniolo/Documents/Misc-Workspace/casiopicture/src/main/java/com/github/casiopicture/gui/Launcher.java) as a plain main entry point which boots the JavaFX application safely from the classpath.
+## Credits
+
+img2calc is by Xavier Andréani (@critor) and Adrien Bertrand (@Adriweb).

@@ -49,3 +49,7 @@ build/
 /tmp/logo.png
 ### Logs ###
 *.log
+
+### Vendored toolchain and dependencies (recreated by ./setup.sh) ###
+.mvn/repo/
+libs/

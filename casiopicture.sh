@@ -1,75 +1,126 @@
 #!/bin/bash
+#
+# Runner for the local toolchain. Everything it needs lives inside this directory; run ./setup.sh
+# once after cloning to populate it.
 
-# Determine workspace root directory
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+set -euo pipefail
 
-# Set up local paths to isolated JDK and Maven
-export JAVA_HOME="${SCRIPT_DIR}/tools/jdk/Contents/Home"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+case "$(uname -s)" in
+    Darwin) JAVA_HOME="${SCRIPT_DIR}/tools/jdk/Contents/Home" ;;
+    *)      JAVA_HOME="${SCRIPT_DIR}/tools/jdk" ;;
+esac
+export JAVA_HOME
 export PATH="${SCRIPT_DIR}/tools/maven/bin:${JAVA_HOME}/bin:${PATH}"
 
-# Check if environment is initialized
-if [ ! -d "${JAVA_HOME}" ] || [ ! -f "${SCRIPT_DIR}/tools/maven/bin/mvn" ]; then
-    echo "Error: Standalone environment tools not found in 'tools/'."
-    echo "Please run './setup.sh' to download and set up JDK and Maven first."
+JAR="${SCRIPT_DIR}/target/casiopicture.jar"
+
+if [ ! -x "${JAVA_HOME}/bin/java" ] || [ ! -x "${SCRIPT_DIR}/tools/maven/bin/mvn" ]; then
+    echo "Toolchain not found in tools/. Run ./setup.sh first." >&2
     exit 1
 fi
 
-COMMAND=$1
-if [ -n "$COMMAND" ]; then
-    shift
-fi
+ensure_jar() {
+    if [ ! -f "${JAR}" ]; then
+        echo "Building..."
+        mvn -q -DskipTests package
+    fi
+}
+
+COMMAND="${1:-}"
+[ $# -gt 0 ] && shift
 
 case "${COMMAND}" in
     build)
-        echo "Building CasioPicture project..."
-        mvn clean package
+        mvn clean package "$@"
         ;;
     run)
-        echo "Running CasioPicture GUI (via JavaFX Maven plugin)..."
-        mvn javafx:run
-        ;;
-    run-jar)
-        if [ ! -f "${SCRIPT_DIR}/target/casiopicture-1.0-SNAPSHOT.jar" ]; then
-            echo "Error: Shaded JAR not found. Run '$0 build' first."
-            exit 1
-        fi
-        echo "Running CasioPicture GUI from Shaded JAR..."
-        java -jar "${SCRIPT_DIR}/target/casiopicture-1.0-SNAPSHOT.jar" "$@"
+        ensure_jar
+        java -jar "${JAR}"
         ;;
     cli)
-        if [ ! -f "${SCRIPT_DIR}/target/casiopicture-1.0-SNAPSHOT.jar" ]; then
-            echo "Building project first to ensure target/casiopicture-1.0-SNAPSHOT.jar exists..."
-            mvn clean package
-        fi
-        echo "Running CasioPicture CLI..."
-        java -cp "${SCRIPT_DIR}/target/casiopicture-1.0-SNAPSHOT.jar" com.github.casiopicture.cli.Cli "$@"
+        ensure_jar
+        java -jar "${JAR}" "$@"
         ;;
     test)
-        echo "Running tests..."
         mvn test "$@"
         ;;
     refgen)
         if ! command -v node >/dev/null 2>&1; then
-            echo "Error: Node.js is required to regenerate the reference vectors."
+            echo "Node.js is required to regenerate the reference vectors." >&2
             exit 1
         fi
         if [ ! -f "${SCRIPT_DIR}/tmp/index.html" ]; then
-            echo "Error: tmp/index.html (the img2calc reference) is missing."
+            echo "tmp/index.html (the img2calc reference) is missing." >&2
             exit 1
         fi
-        echo "Regenerating reference vectors from tmp/index.html..."
         node "${SCRIPT_DIR}/tools/refgen/refgen.mjs"
         ;;
+    package)
+        # jpackage wraps the fat jar together with a trimmed runtime, producing a .dmg on macOS,
+        # a .msi on Windows and a .deb on Linux.
+        mvn -q -DskipTests package
+        OUT="${SCRIPT_DIR}/target/installer"
+        rm -rf "${OUT}"
+        mkdir -p "${OUT}"
+
+        case "$(uname -s)" in
+            Darwin) TYPE=dmg ;;
+            Linux)  TYPE=deb ;;
+            *)      TYPE=msi ;;
+        esac
+
+        # A trimmed runtime instead of the whole JDK. The app is non-modular (JavaFX lives in the
+        # fat jar on the classpath), so the modules it needs are listed by hand:
+        #   java.desktop   AWT/Swing imaging, which the engine and JavaFX both use
+        #   java.logging   used by JavaFX internally
+        #   java.xml       FXML-adjacent plumbing pulled in by the toolkit
+        #   java.prefs     JavaFX preference lookups on some platforms
+        #   jdk.unsupported  sun.misc.Unsafe, still referenced by JavaFX
+        RUNTIME="${SCRIPT_DIR}/target/runtime"
+        rm -rf "${RUNTIME}"
+        jlink \
+            --add-modules java.base,java.desktop,java.logging,java.xml,java.prefs,jdk.unsupported \
+            --strip-debug --no-header-files --no-man-pages --compress=zip-6 \
+            --output "${RUNTIME}"
+
+        # Only the fat jar should be packaged, not the rest of target/.
+        STAGE="${SCRIPT_DIR}/target/package-input"
+        rm -rf "${STAGE}"
+        mkdir -p "${STAGE}"
+        cp "${JAR}" "${STAGE}/"
+
+        jpackage \
+            --name CasioPicture \
+            --app-version 1.0.0 \
+            --description "Convert images to calculator picture and script formats" \
+            --vendor casiopicture \
+            --input "${STAGE}" \
+            --main-jar "$(basename "${JAR}")" \
+            --main-class com.github.casiopicture.Main \
+            --runtime-image "${RUNTIME}" \
+            --dest "${OUT}" \
+            --type "${TYPE}" \
+            "$@"
+        echo "Installer written to ${OUT}"
+        ls -lh "${OUT}"
+        ;;
     *)
-        echo "Usage: $0 {build|run|run-jar|cli|test}"
-        echo "  build         - Compile and package the application using local JDK & Maven"
-        echo "  run           - Run the GUI application using JavaFX Maven plugin"
-        echo "  run-jar       - Run the GUI application from the shaded JAR file"
-        echo "  cli [args]    - Run the CLI application with arguments"
-        echo "  test [args]   - Run unit/integration tests with arguments"
-        echo "  refgen        - Regenerate the golden reference vectors from tmp/index.html"
-        echo ""
-        echo "Example: Run conversion via CLI:"
-        echo "  $0 cli -f cp.g3p test_simple_384x192.png -o output.g3p"
+        cat <<'USAGE'
+Usage: ./casiopicture.sh <command> [args]
+
+  run              Open the application
+  cli [args]       Run the command line (try: cli --help)
+  build            Compile, test and package
+  test [args]      Run the test suite
+  package          Build a native installer for this platform
+  refgen           Regenerate the golden reference vectors from tmp/index.html
+
+Examples:
+  ./casiopicture.sh cli convert photo.png -f cp.g3p --name PICT1
+  ./casiopicture.sh cli formats --target cg
+  ./casiopicture.sh cli inspect PICT1.g3p
+USAGE
         ;;
 esac

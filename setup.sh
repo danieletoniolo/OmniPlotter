@@ -1,82 +1,98 @@
 #!/bin/bash
+#
+# One-shot setup for a fresh clone.
+#
+# Downloads a JDK and Maven into tools/, then resolves every dependency into the project itself
+# (.mvn/repo and libs/). Nothing is installed system-wide and the user's ~/.m2 is never touched, so
+# the checkout is self-contained and safe to delete.
+#
+# Re-running is cheap: anything already present is left alone.
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+set -euo pipefail
 
-echo "=== CasioPicture Standalone Environment Setup ==="
-
-# 1. Detect Architecture
-ARCH=$(uname -m)
-OS=$(uname -s)
-
-if [ "$OS" != "Darwin" ]; then
-    echo "Error: This setup script is configured for macOS only."
-    exit 1
-fi
-
-echo "Detected OS: macOS ($ARCH)"
-
-# Determine JDK download URL based on architecture
-JDK_URL=""
-if [ "$ARCH" = "arm64" ]; then
-    JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/mac/aarch64/jdk/hotspot/normal/eclipse"
-elif [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "x64" ]; then
-    JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/mac/x64/jdk/hotspot/normal/eclipse"
-else
-    echo "Error: Unsupported architecture $ARCH"
-    exit 1
-fi
-
-# 2. Create tools directories
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TOOLS_DIR="${SCRIPT_DIR}/tools"
 JDK_DIR="${TOOLS_DIR}/jdk"
 MAVEN_DIR="${TOOLS_DIR}/maven"
 
-mkdir -p "${TOOLS_DIR}"
+# JDK 21: jpackage is mature there, and it is what JavaFX 21 is built against.
+JDK_FEATURE=21
+MAVEN_VERSION=3.9.9
 
-# 3. Download and Install JDK if not already present
-if [ -f "${JDK_DIR}/Contents/Home/bin/java" ]; then
-    echo "Java JDK 17 is already installed locally in tools/jdk."
+echo "=== CasioPicture setup ==="
+
+# --- 1. Identify the platform -------------------------------------------------------------------
+
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "${OS}" in
+    Darwin) JDK_OS=mac;     JDK_HOME_SUFFIX="/Contents/Home" ;;
+    Linux)  JDK_OS=linux;   JDK_HOME_SUFFIX="" ;;
+    MINGW*|MSYS*|CYGWIN*) JDK_OS=windows; JDK_HOME_SUFFIX="" ;;
+    *) echo "Unsupported operating system: ${OS}" >&2; exit 1 ;;
+esac
+
+case "${ARCH}" in
+    arm64|aarch64)  JDK_ARCH=aarch64 ;;
+    x86_64|amd64)   JDK_ARCH=x64 ;;
+    *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;;
+esac
+
+echo "Platform: ${JDK_OS}/${JDK_ARCH}"
+
+JAVA_HOME="${JDK_DIR}${JDK_HOME_SUFFIX}"
+MVN="${MAVEN_DIR}/bin/mvn"
+
+# --- 2. JDK -------------------------------------------------------------------------------------
+
+if [ -x "${JAVA_HOME}/bin/java" ] && "${JAVA_HOME}/bin/java" -version 2>&1 | grep -q "\"${JDK_FEATURE}\."; then
+    echo "JDK ${JDK_FEATURE} already present in tools/jdk."
 else
-    echo "Downloading JDK 17..."
+    echo "Downloading JDK ${JDK_FEATURE} (${JDK_OS}/${JDK_ARCH})..."
+    rm -rf "${JDK_DIR}"
     mkdir -p "${JDK_DIR}"
-    curl -L -o "${TOOLS_DIR}/jdk.tar.gz" "${JDK_URL}"
-    
-    echo "Extracting JDK 17..."
+    URL="https://api.adoptium.net/v3/binary/latest/${JDK_FEATURE}/ga/${JDK_OS}/${JDK_ARCH}/jdk/hotspot/normal/eclipse"
+    curl -fL --progress-bar -o "${TOOLS_DIR}/jdk.tar.gz" "${URL}"
     tar -xzf "${TOOLS_DIR}/jdk.tar.gz" -C "${JDK_DIR}" --strip-components=1
-    rm "${TOOLS_DIR}/jdk.tar.gz"
-    echo "JDK 17 installed successfully."
+    rm -f "${TOOLS_DIR}/jdk.tar.gz"
+    echo "JDK ${JDK_FEATURE} installed."
 fi
 
-# 4. Download and Install Maven if not already present
-if [ -f "${MAVEN_DIR}/bin/mvn" ]; then
-    echo "Apache Maven is already installed locally in tools/maven."
+# --- 3. Maven -----------------------------------------------------------------------------------
+
+if [ -x "${MVN}" ]; then
+    echo "Maven already present in tools/maven."
 else
-    echo "Downloading Apache Maven 3.9.6..."
+    echo "Downloading Apache Maven ${MAVEN_VERSION}..."
+    rm -rf "${MAVEN_DIR}"
     mkdir -p "${MAVEN_DIR}"
-    curl -L -o "${TOOLS_DIR}/maven.tar.gz" "https://archive.apache.org/dist/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.tar.gz"
-    
-    echo "Extracting Apache Maven..."
+    curl -fL --progress-bar -o "${TOOLS_DIR}/maven.tar.gz" \
+        "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
     tar -xzf "${TOOLS_DIR}/maven.tar.gz" -C "${MAVEN_DIR}" --strip-components=1
-    rm "${TOOLS_DIR}/maven.tar.gz"
-    echo "Apache Maven 3.9.6 installed successfully."
+    rm -f "${TOOLS_DIR}/maven.tar.gz"
+    echo "Maven ${MAVEN_VERSION} installed."
 fi
 
-# 5. Make binaries executable (just in case)
-chmod +x "${JDK_DIR}/Contents/Home/bin/"* || true
-chmod +x "${MAVEN_DIR}/bin/"* || true
-
-# 6. Make the runner executable.
-# casiopicture.sh is a tracked file, not generated here: when setup.sh carried a copy of it in a
-# heredoc, every edit had to be made twice or the two silently diverged.
+chmod +x "${JAVA_HOME}/bin/"* 2>/dev/null || true
+chmod +x "${MAVEN_DIR}/bin/"* 2>/dev/null || true
 chmod +x "${SCRIPT_DIR}/casiopicture.sh"
 
+# --- 4. Dependencies ----------------------------------------------------------------------------
+#
+# .mvn/maven.config points the repository at .mvn/repo, so this populates the project rather than
+# ~/.m2. `package` also runs maven-dependency-plugin, which mirrors the runtime jars into libs/.
+
+echo "Resolving dependencies into .mvn/repo and libs/ ..."
+export JAVA_HOME
+cd "${SCRIPT_DIR}"
+"${MVN}" -q -DskipTests package
+
 echo ""
-echo "=== Setup Completed Successfully! ==="
-echo "You can now build, test, and run the application using the runner script:"
-echo "  Build:      ./casiopicture.sh build"
-echo "  Run tests:  ./casiopicture.sh test"
-echo "  Run GUI:    ./casiopicture.sh run"
-echo "  Run CLI:    ./casiopicture.sh cli [args]"
-echo "====================================="
+echo "=== Ready ==="
+echo "  ./casiopicture.sh run              open the app"
+echo "  ./casiopicture.sh cli --help       command line usage"
+echo "  ./casiopicture.sh test             run the test suite"
+echo "  ./casiopicture.sh package          build a native installer"
+echo ""
+echo "Everything lives in this directory: tools/ (JDK, Maven), .mvn/repo and libs/ (dependencies)."
