@@ -2,6 +2,8 @@ package com.github.casiopicture;
 
 import com.github.casiopicture.engine.EngineApi;
 import com.github.casiopicture.engine.data.ConversionOptions;
+import com.github.casiopicture.engine.data.Format;
+import com.github.casiopicture.engine.data.Target;
 import com.github.casiopicture.engine.data.ConversionResult;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -46,7 +48,9 @@ public class G3PEncoderIntegrationTest {
         byte[] imageBytes = Files.readAllBytes(TEST_IMAGE_PATH);
         
         // Generate G3P file
-        ConversionOptions options = new ConversionOptions(384, 192, 65536, false, false);
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.CASIO_CG, Format.CP_G3P)
+            .withKeepRatio(false);
         ConversionResult result = EngineApi.convert(imageBytes, "test.png", "cp.g3p", options);
         assertNotNull(result, "Conversion should succeed");
         
@@ -68,7 +72,9 @@ public class G3PEncoderIntegrationTest {
         BufferedImage image = ImageIO.read(TEST_IMAGE_PATH.toFile());
         byte[] imageBytes = Files.readAllBytes(TEST_IMAGE_PATH);
         
-        ConversionOptions options = new ConversionOptions(384, 192, 65536, false, false);
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.CASIO_CG, Format.CP_G3P)
+            .withKeepRatio(false);
         ConversionResult result = EngineApi.convert(imageBytes, "test.png", "cp.g3p", options);
         
         byte[] g3pData = result.fileBytes();
@@ -95,7 +101,9 @@ public class G3PEncoderIntegrationTest {
         
         byte[] imageBytes = Files.readAllBytes(TEST_IMAGE_PATH);
         
-        ConversionOptions options = new ConversionOptions(384, 192, 65536, false, false);
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.CASIO_CG, Format.CP_G3P)
+            .withKeepRatio(false);
         ConversionResult result = EngineApi.convert(imageBytes, "test.png", "cp.g3p", options);
         
         G3PFileValidator.ValidationResult validation = G3PFileValidator.validate(result.fileBytes());
@@ -132,7 +140,9 @@ public class G3PEncoderIntegrationTest {
         
         // Generate a test file with known content
         byte[] imageBytes = Files.readAllBytes(TEST_IMAGE_PATH);
-        ConversionOptions options = new ConversionOptions(384, 192, 65536, false, false);
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.CASIO_CG, Format.CP_G3P)
+            .withKeepRatio(false);
         ConversionResult result = EngineApi.convert(imageBytes, "test.png", "cp.g3p", options);
         
         G3PFileValidator.ValidationResult testValidation = G3PFileValidator.validate(result.fileBytes());
@@ -148,7 +158,9 @@ public class G3PEncoderIntegrationTest {
         if (!Files.exists(TEST_IMAGE_PATH)) return;
         
         byte[] imageBytes = Files.readAllBytes(TEST_IMAGE_PATH);
-        ConversionOptions options = new ConversionOptions(384, 192, 65536, false, false);
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.CASIO_CG, Format.CP_G3P)
+            .withKeepRatio(false);
         
         // Generate file twice
         ConversionResult result1 = EngineApi.convert(imageBytes, "test.png", "cp.g3p", options);

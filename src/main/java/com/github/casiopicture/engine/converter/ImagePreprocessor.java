@@ -59,7 +59,7 @@ public class ImagePreprocessor {
         image = resize(image, options);
 
         // 2. Handle fit (centering on canvas)
-        if (options.fit()) {
+        if (options.enlargeSmaller()) {
             image = fitToCanvas(image, options);
         }
 

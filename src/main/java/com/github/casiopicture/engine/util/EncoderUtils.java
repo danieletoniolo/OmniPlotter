@@ -15,31 +15,87 @@ public final class EncoderUtils {
     }
 
     /**
-     * Compresses pixel data using Run-Length Encoding (RLE).
-     * Output format: pairs of (runLength, colorIndex), where runLength is max 255.
+     * Renders a character sequence as one or more Python {@code bytes} literals.
      *
-     * @param pixelData The list of pixel color indices.
-     * @return A StringBuilder containing escaped hex string for Python byte literals.
+     * <p>Port of {@code stringToPythonBytes} (tmp/index.html:698). Three behaviours are worth
+     * knowing:
+     *
+     * <ul>
+     *   <li>The quote character is chosen by counting: whichever of {@code "} or {@code '} appears
+     *       less often in the data becomes the delimiter, and only the other one gets escaped.</li>
+     *   <li>Octal escapes are used for values below 64, but only when the next character is not a
+     *       digit 0-7, since {@code \\1} followed by {@code 7} would read as {@code \\17}.</li>
+     *   <li>With {@code lmax} above 6 the output is split into several adjacent literals, one per
+     *       line. Casio's on-calc editor will not open lines longer than 256 characters.</li>
+     * </ul>
+     *
+     * @param allowOctal emit {@code \\a} and octal escapes. False for the MaClasseTI.fr target,
+     *                   whose Python does not accept them.
      */
-    public static StringBuilder compressRLE(List<Byte> pixelData) {
-        StringBuilder rleHex = new StringBuilder();
-        int i = 0;
-        while (i < pixelData.size()) {
-            byte current = pixelData.get(i);
-            int runLength = 1;
-            while ((i + runLength) < pixelData.size() && pixelData.get(i + runLength) == current) {
-                runLength++;
+    public static String stringToPythonBytes(CharSequence s, int lmax, boolean allowOctal) {
+        int n = s.length();
+        int singleQuotes = 0;
+        int doubleQuotes = 0;
+        for (int i = 0; i < n; i++) {
+            char v = s.charAt(i);
+            if (v == '"') {
+                doubleQuotes++;
+            } else if (v == '\'') {
+                singleQuotes++;
+            }
+        }
+        boolean useSingle = doubleQuotes > singleQuotes;
+
+        StringBuilder out = new StringBuilder();
+        StringBuilder line = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            int v = s.charAt(i);
+            int next = i < n - 1 ? s.charAt(i + 1) : -1;
+            String c;
+            if (allowOctal && v == 7) c = "\\a";
+            else if (v == 8) c = "\\b";
+            else if (v == 9) c = "\\t";
+            else if (v == 10) c = "\\n";
+            else if (v == 11) c = "\\v";
+            else if (v == 12) c = "\\f";
+            else if (v == 13) c = "\\r";
+            else if (v == 92) c = "\\\\";
+            else if (v == 34 && doubleQuotes <= singleQuotes) c = "\\\"";
+            else if (v == 39 && doubleQuotes > singleQuotes) c = "\\'";
+            else if (v >= 32 && v <= 0x7E) c = String.valueOf((char) v);
+            else if (allowOctal && v <= 077 && (next < '0' || next > '7')) c = "\\" + Integer.toOctalString(v);
+            else {
+                String hex = Integer.toHexString(v);
+                c = "\\x" + (v < 0x10 ? "0" + hex : hex);
             }
 
-            int originalRunLength = runLength;
-            while (runLength > 0) {
-                int chunk = Math.min(runLength, 255);
-                rleHex.append(String.format("\\x%02x\\x%02x", chunk, current & 0xFF));
-                runLength -= chunk;
+            if (lmax >= 7 && line.length() + c.length() + 3 >= lmax) {
+                out.append(quote(line, useSingle)).append('\n');
+                line.setLength(0);
             }
-            i += originalRunLength;
+            line.append(c);
         }
-        return rleHex;
+        out.append(quote(line, useSingle)).append('\n');
+        return out.toString();
+    }
+
+    private static String quote(CharSequence body, boolean useSingle) {
+        return useSingle ? "b'" + body + "'" : "b\"" + body + "\"";
+    }
+
+    /**
+     * Encodes a generated script to bytes the way the reference writes it out.
+     *
+     * <p>{@code addBlobFileLink} pushes each character's code into a {@code Uint8Array}, so a
+     * character above 0xFF contributes only its low byte. That is reachable: the RLE writes palette
+     * indices straight into the string, and a large palette pushes them past 255.
+     */
+    public static byte[] scriptToBytes(CharSequence script) {
+        byte[] out = new byte[script.length()];
+        for (int i = 0; i < script.length(); i++) {
+            out[i] = (byte) script.charAt(i);
+        }
+        return out;
     }
 
     /**

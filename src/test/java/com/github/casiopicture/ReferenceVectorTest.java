@@ -3,6 +3,7 @@ package com.github.casiopicture;
 import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.ConversionResult;
 import com.github.casiopicture.engine.data.Format;
+import com.github.casiopicture.engine.data.Target;
 import com.github.casiopicture.engine.encoder.FileEncoder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicTest;
@@ -140,8 +141,12 @@ public class ReferenceVectorTest {
         BufferedImage image = loadImage(v.image(), v.width(), v.height());
 
         Format format = Format.fromString(v.format());
-        ConversionOptions options = new ConversionOptions(
-            v.width(), v.height(), 0, true, false);
+        // The target is part of the vector: several script generators emit different imports and
+        // drawing calls depending on it.
+        ConversionOptions options = ConversionOptions
+            .defaults(Target.fromString(v.target()), format)
+            .withSize(v.width(), v.height())
+            .withOnCalc(v.oncalcName(), v.oncalcNum());
 
         ConversionResult result = FileEncoder.getEncoder(format)
             .encode(image, format, v.oncalcName() + ".png", options);

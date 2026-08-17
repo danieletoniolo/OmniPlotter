@@ -3,6 +3,7 @@ package com.github.casiopicture.cli;
 import com.github.casiopicture.engine.EngineApi;
 import com.github.casiopicture.engine.data.ConversionOptions;
 import com.github.casiopicture.engine.data.ConversionResult;
+import com.github.casiopicture.engine.data.Format;
 import com.github.casiopicture.engine.data.FormatConfig;
 import org.apache.commons.io.FileUtils;
 import picocli.CommandLine;
@@ -59,7 +60,9 @@ public class Cli implements Callable<Integer> {
 
         byte[] inputBytes = FileUtils.readFileToByteArray(inputFile);
 
-        ConversionOptions options = new ConversionOptions(finalWidth, finalHeight, finalColors, keepRatio, fit);
+        ConversionOptions options = ConversionOptions.defaults(null, Format.fromString(format))
+            .withSize(finalWidth, finalHeight).withColors(finalColors)
+            .withKeepRatio(keepRatio).withEnlargeSmaller(fit);
 
         System.out.println("Converting " + inputFile.getName() + " to " + format + "...");
         System.out.println("Options: " + finalWidth + "x" + finalHeight + ", " + finalColors + " colors, keepRatio=" + keepRatio + ", fit=" + fit);

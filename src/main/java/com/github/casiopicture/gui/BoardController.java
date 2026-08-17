@@ -439,7 +439,10 @@ public class BoardController {
 
                         boolean preserveRatio = aspectRatioToggle.isSelected();
                         boolean enlargeSmaller = fitToggle.isSelected();
-                        ConversionOptions options = new ConversionOptions(width, height, colors, preserveRatio, enlargeSmaller);
+                        ConversionOptions options = ConversionOptions
+                            .defaults(currentTarget, Format.fromString(format))
+                            .withSize(width, height).withColors(colors)
+                            .withKeepRatio(preserveRatio).withEnlargeSmaller(enlargeSmaller);
 
                         ConversionResult result = EngineApi.convert(inputBytes, inputFile.getName(), format, options);
 
