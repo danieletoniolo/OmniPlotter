@@ -152,6 +152,14 @@ public class ReferenceVectorTest {
             .encode(image, format, v.oncalcName() + ".png", options);
         byte[] actual = result.fileBytes();
 
+        // The on-calculator name is part of what the reference produces, and for the slot formats
+        // it is encoded in the bytes too. It was recorded in the manifest but never checked.
+        String expectedName = format.fileName(v.calcName(), Target.fromString(v.target()));
+        if (!expectedName.equals(result.suggestedFileName())) {
+            fail(v.id() + ": expected file name " + expectedName
+                + " but got " + result.suggestedFileName());
+        }
+
         if (!java.util.Arrays.equals(expected, actual)) {
             // Surefire reports dynamic tests under the factory method name, so the vector id has to
             // travel in the message or a failure is untraceable.
