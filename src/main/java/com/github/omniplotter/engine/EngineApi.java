@@ -25,7 +25,13 @@ public final class EngineApi {
     /** Converts an already-decoded image. */
     public static ConversionResult convert(BufferedImage image, String originalFileName,
                                            Format format, ConversionOptions options) throws IOException {
-        BufferedImage processed = ImagePreprocessor.preprocess(image, format, options);
+        return encode(ImagePreprocessor.preprocess(image, format, options),
+            originalFileName, format, options);
+    }
+
+    /** Encodes an image that has already been through {@link #preview}, skipping preprocessing. */
+    public static ConversionResult encode(BufferedImage processed, String originalFileName,
+                                          Format format, ConversionOptions options) throws IOException {
         return FileEncoder.getEncoder(format).encode(processed, format, originalFileName, options);
     }
 

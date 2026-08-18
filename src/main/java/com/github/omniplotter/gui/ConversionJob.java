@@ -50,12 +50,23 @@ public class ConversionJob {
         return source;
     }
 
-    public BufferedImage preview(Format format, ConversionOptions options) throws Exception {
+    /**
+     * What the encoder will actually see, plus what it will actually produce.
+     *
+     * <p>Encoding as well as preprocessing lets the window show the output size and any capacity
+     * warning <em>before</em> converting, which the web tool can only report afterwards. Encoding
+     * is cheap next to the preprocessing that precedes it.
+     */
+    public record Preview(BufferedImage image, int encodedSize) {}
+
+    public Preview preview(Format format, ConversionOptions options) throws Exception {
         BufferedImage src = source();
         if (src == null) {
             throw new IllegalStateException(error == null ? "could not read image" : error);
         }
-        return EngineApi.preview(src, format, options);
+        BufferedImage processed = EngineApi.preview(src, format, options);
+        int size = EngineApi.encode(processed, file.getName(), format, options).fileBytes().length;
+        return new Preview(processed, size);
     }
 
     /** Converts and writes the result into {@code outputDir}, returning the file written. */

@@ -6,6 +6,7 @@ import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Mode;
+import com.github.omniplotter.engine.data.OutputLimits;
 import com.github.omniplotter.engine.data.Target;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -196,6 +197,11 @@ public class ConvertCommand implements Callable<Integer> {
         System.out.printf("%s -> %s (%s, %dx%d, %d bytes)%n",
             input.getName(), destination, format.id(),
             perFile.width(), perFile.height(), result.fileBytes().length);
+
+        // The file is valid but may not fit on the device. Warn and still write it, as the
+        // reference does: the user may well be targeting a firmware with more room.
+        OutputLimits.check(target, format, result.fileBytes().length)
+            .ifPresent(warning -> System.err.println("warning: " + warning));
         return true;
     }
 

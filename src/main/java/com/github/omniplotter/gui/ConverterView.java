@@ -5,6 +5,7 @@ import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Mode;
+import com.github.omniplotter.engine.data.OutputLimits;
 import com.github.omniplotter.engine.data.Target;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -80,6 +81,7 @@ public class ConverterView extends BorderPane {
     private final ImageView previewView = new ImageView();
     private final Label sourceCaption = new Label("No image selected");
     private final Label previewCaption = new Label();
+    private final Label sizeWarning = new Label();
 
     private final Label outputLabel = new Label();
     private final ProgressBar progress = new ProgressBar(0);
@@ -90,6 +92,14 @@ public class ConverterView extends BorderPane {
     /** Suppresses preview refreshes while the format cascade is being rebuilt. */
     private boolean updating;
     private Task<?> previewTask;
+    /**
+     * Generation counter for preview requests.
+     *
+     * <p>Changing the mode cascades into target and format, firing several requests in a row, and
+     * cancelling a running task does not stop it delivering. Without this, a superseded task can
+     * finish last and leave the caption describing a format that is no longer selected.
+     */
+    private long previewGeneration;
 
     public ConverterView(Stage stage) {
         this.stage = stage;
@@ -175,8 +185,14 @@ public class ConverterView extends BorderPane {
         previewView.setSmooth(false);
         sourceView.setSmooth(true);
 
+        sizeWarning.getStyleClass().add(Styles.DANGER);
+        sizeWarning.setWrapText(true);
+        sizeWarning.setVisible(false);
+        sizeWarning.setManaged(false);
+        sizeWarning.setGraphic(new FontIcon(Feather.ALERT_TRIANGLE));
+
         Node source = previewCard("Source", sourceView, sourceCaption);
-        Node preview = previewCard("Preview", previewView, previewCaption);
+        Node preview = previewCard("Preview", previewView, previewCaption, sizeWarning);
         HBox.setHgrow(source, Priority.ALWAYS);
         HBox.setHgrow(preview, Priority.ALWAYS);
 
@@ -185,7 +201,7 @@ public class ConverterView extends BorderPane {
         return row;
     }
 
-    private Node previewCard(String title, ImageView view, Label caption) {
+    private Node previewCard(String title, ImageView view, Label... captions) {
         Label heading = new Label(title);
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
@@ -201,10 +217,11 @@ public class ConverterView extends BorderPane {
         view.fitWidthProperty().bind(frame.widthProperty().subtract(24));
         view.fitHeightProperty().bind(frame.heightProperty().subtract(24));
 
-        caption.getStyleClass().add(Styles.TEXT_MUTED);
-        caption.setWrapText(true);
+        captions[0].getStyleClass().add(Styles.TEXT_MUTED);
+        captions[0].setWrapText(true);
 
-        VBox card = new VBox(8, heading, frame, caption);
+        VBox card = new VBox(8, heading, frame);
+        card.getChildren().addAll(captions);
         card.getStyleClass().add("card");
         card.setMinWidth(0);
         card.setPrefWidth(0);
@@ -457,6 +474,8 @@ public class ConverterView extends BorderPane {
         if (job == null || format == null || job.source() == null) {
             previewView.setImage(null);
             previewCaption.setText("");
+            sizeWarning.setVisible(false);
+            sizeWarning.setManaged(false);
             return;
         }
 
@@ -464,27 +483,50 @@ public class ConverterView extends BorderPane {
             previewTask.cancel();
         }
 
+        long generation = ++previewGeneration;
         ConversionOptions options = currentOptions(job);
-        Task<BufferedImage> task = new Task<>() {
+        Task<ConversionJob.Preview> task = new Task<>() {
             @Override
-            protected BufferedImage call() throws Exception {
+            protected ConversionJob.Preview call() throws Exception {
                 return job.preview(format, options);
             }
         };
         task.setOnSucceeded(e -> {
-            BufferedImage out = task.getValue();
+            if (generation != previewGeneration) {
+                return;   // superseded by a later request
+            }
+            ConversionJob.Preview preview = task.getValue();
+            BufferedImage out = preview.image();
             previewView.setImage(SwingFXUtils.toFXImage(out, null));
-            previewCaption.setText(String.format("%s — %d × %d, %d colours",
-                format.id(), out.getWidth(), out.getHeight(), countColors(out)));
+            previewCaption.setText(String.format(java.util.Locale.ROOT, "%s — %d × %d, %d colours, %s",
+                format.id(), out.getWidth(), out.getHeight(), countColors(out),
+                humanSize(preview.encodedSize())));
+
+            // Say up front whether the result will actually fit on the calculator, rather than
+            // letting the user find out at transfer time.
+            var warning = OutputLimits.check(options.target(), format, preview.encodedSize());
+            sizeWarning.setText(warning.orElse(""));
+            sizeWarning.setVisible(warning.isPresent());
+            sizeWarning.setManaged(warning.isPresent());
         });
         task.setOnFailed(e -> {
+            if (generation != previewGeneration) {
+                return;
+            }
             previewView.setImage(null);
             previewCaption.setText("Preview failed: " + task.getException().getMessage());
+            sizeWarning.setVisible(false);
+            sizeWarning.setManaged(false);
         });
         previewTask = task;
         Thread thread = new Thread(task, "preview");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static String humanSize(int bytes) {
+        return bytes < 1024 ? bytes + " B"
+            : String.format(java.util.Locale.ROOT, "%.1f KB", bytes / 1024.0);
     }
 
     private static int countColors(BufferedImage img) {
