@@ -5,11 +5,15 @@ import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.encoder.FileEncoder;
+import com.github.omniplotter.engine.util.Exif;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Entry point for converting an image to a calculator file.
@@ -60,8 +64,42 @@ public final class EngineApi {
     public static BufferedImage decode(byte[] imageBytes, String name) throws IOException {
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
         if (image == null) {
-            throw new IOException("Not a readable image: " + name);
+            throw new IOException(unreadable(imageBytes));
         }
-        return image;
+        // Before anything measures it: a portrait photograph that arrives on its side would
+        // otherwise be fitted to the canvas as though it were landscape.
+        return Exif.applyOrientation(image, imageBytes);
+    }
+
+    /**
+     * Says what went wrong with enough detail to act on.
+     *
+     * <p>HEIC gets named because it is what an iPhone saves by default, so it is the likeliest
+     * thing anyone hands this first — and because "not a readable image" for the format your camera
+     * produces reads as the application being broken.
+     */
+    private static String unreadable(byte[] imageBytes) {
+        if (isHeif(imageBytes)) {
+            return "HEIC/HEIF images cannot be read: no pure-Java decoder exists for them. "
+                + "Export as PNG or JPEG and convert that.";
+        }
+        String readable = Arrays.stream(ImageIO.getReaderFormatNames())
+            .map(format -> format.toLowerCase(Locale.ROOT))
+            .distinct()
+            .sorted()
+            .collect(Collectors.joining(", "));
+        // Both callers already say which file this was about, so the message does not repeat it.
+        return "Not a readable image. Readable formats are: " + readable + ".";
+    }
+
+    /** The ISO base media brand sits at offset 4, after the size of the first box. */
+    private static boolean isHeif(byte[] data) {
+        if (data == null || data.length < 12
+            || data[4] != 'f' || data[5] != 't' || data[6] != 'y' || data[7] != 'p') {
+            return false;
+        }
+        String brand = new String(data, 8, 4, java.nio.charset.StandardCharsets.US_ASCII);
+        return brand.startsWith("hei") || brand.startsWith("mif") || brand.startsWith("msf")
+            || brand.startsWith("hev") || brand.startsWith("avi");
     }
 }
