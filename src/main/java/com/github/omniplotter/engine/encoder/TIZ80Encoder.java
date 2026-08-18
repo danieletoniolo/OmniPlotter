@@ -3,6 +3,7 @@ package com.github.omniplotter.engine.encoder;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
+import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.util.ByteSeq;
 import com.github.omniplotter.engine.util.EncoderUtils;
 import com.github.omniplotter.engine.util.Palette;
@@ -28,24 +29,21 @@ public class TIZ80Encoder implements FileEncoder {
 
     @Override
     public ConversionResult encode(BufferedImage image, Format format, String originalFileName, ConversionOptions options) throws IOException {
-        String baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
-        String varName = baseName.substring(0, Math.min(baseName.length(), 8));
+        // im8c/85i/86i carry a user-chosen variable name; the other formats are slot-numbered
+        // (Pic1..Pic9 / Image1..Image9) and their on-calc name is derived from that number. Both
+        // come from the request: the slot in particular is written into the file, so ignoring it
+        // would silently install the picture in the wrong place.
+        int num = options.onCalcNumber();
+        String requested = options.onCalcName() == null || options.onCalcName().isBlank()
+            ? OnCalcName.suggestFrom(format, originalFileName)
+            : options.onCalcName();
 
         byte[] encodedData;
-        String calcName;
-
-        // im8c/85i/86i carry a user-chosen variable name; the other formats are slot-numbered
-        // (Pic1..Pic9 / Image1..Image9) and their on-calc name is derived from that number.
-        int num = 1;
-        switch (format) {
-            case TI_8XV, TI_85I, TI_86I -> {
-                var name = varName.substring(0, 1).toUpperCase() + varName.substring(1);
-                if (name.length() > 8) name = name.substring(0, 8);
-                calcName = name;
-            }
-            case TI_8CA -> calcName = "Image" + num;
-            default -> calcName = "Pic" + num;
-        }
+        String calcName = switch (format) {
+            case TI_8XV, TI_85I, TI_86I -> requested;
+            case TI_8CA -> "Image" + num;
+            default -> "Pic" + num;
+        };
 
         encodedData = switch (format) {
             case TI_8XV -> encodeIm8c(image, format, calcName, num);

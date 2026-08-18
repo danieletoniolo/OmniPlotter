@@ -5,6 +5,7 @@ import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Mode;
+import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
 import com.github.omniplotter.engine.data.Target;
 import javafx.application.Platform;
@@ -256,6 +257,7 @@ public class ConverterView extends BorderPane {
 
         keepRatio.setSelected(true);
         onCalcName.setPromptText("PICT1");
+        onCalcName.textProperty().addListener((o, was, now) -> validateOnCalcName());
         onCalcHint.getStyleClass().add(Styles.TEXT_MUTED);
         onCalcHint.setWrapText(true);
 
@@ -404,25 +406,31 @@ public class ConverterView extends BorderPane {
             presetChips.getChildren().add(chip);
         }
 
-        boolean slotted = isSlotted(format);
+        OnCalcName.Rule rule = OnCalcName.ruleFor(format);
+        boolean slotted = rule == OnCalcName.Rule.SLOT;
         onCalcNumber.setDisable(!slotted);
-        onCalcName.setDisable(slotted);
-        onCalcHint.setText(slotted
-            ? "Stored on the calculator as " + (format == Format.TI_8CA ? "Image" : "Pic")
-              + onCalcNumber.getValue() + "."
-            : format == Format.ZPIC
-                ? "Stored as pic" + onCalcNumber.getValue() + ", without a file extension."
-                : "Up to 8 characters. Defaults to the file name.");
+        onCalcName.setDisable(slotted || rule == OnCalcName.Rule.NONE);
+
+        // The number of picture slots is a property of the model, not the format, so the spinner
+        // has to follow the target: a TI-73 has three, numbered from one.
+        Target.SlotRange slots = Target.slotRange(targetBox.getValue());
+        int current = onCalcNumber.getValue() == null ? slots.min() : onCalcNumber.getValue();
+        onCalcNumber.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
+            slots.min(), slots.max(), slots.contains(current) ? current : slots.min()));
+
+        onCalcHint.setText(switch (rule) {
+            case SLOT -> "Stored on the calculator as "
+                + (format == Format.ZPIC ? "pic" : format == Format.TI_8CA ? "Image" : "Pic")
+                + onCalcNumber.getValue() + ". Slots " + slots.min() + "-" + slots.max()
+                + " on this model.";
+            case NONE -> "Saved as an ordinary file; the name is up to you.";
+            default -> "Written into the file: " + OnCalcName.describe(format, targetBox.getValue())
+                + ". Defaults to the image's own name.";
+        });
 
         updating = false;
+        validateOnCalcName();
         schedulePreview();
-    }
-
-    private static boolean isSlotted(Format format) {
-        return switch (format) {
-            case TI_8CA, TI_8CI, TI_8XI, TI_83I, TI_73I, TI_82I -> true;
-            default -> false;
-        };
     }
 
     private ConversionOptions currentOptions(ConversionJob job) {
@@ -522,6 +530,20 @@ public class ConverterView extends BorderPane {
         Thread thread = new Thread(task, "preview");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    /** Marks the name field when what is typed would not be accepted by the calculator. */
+    private void validateOnCalcName() {
+        Format format = formatBox.getValue();
+        if (format == null) {
+            return;
+        }
+        String typed = onCalcName.getText();
+        boolean bad = typed != null && !typed.isBlank()
+            && OnCalcName.validateName(format, typed).isPresent();
+        onCalcName.pseudoClassStateChanged(
+            javafx.css.PseudoClass.getPseudoClass("danger"), bad);
+        convertButton.setDisable(bad);
     }
 
     private static String humanSize(int bytes) {

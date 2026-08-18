@@ -3,6 +3,7 @@ package com.github.omniplotter.engine.encoder;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
+import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.util.EncoderUtils;
 import com.github.omniplotter.engine.util.Palette;
 import com.github.omniplotter.engine.util.PixelBuffer;
@@ -37,7 +38,10 @@ public class CasioPictureEncoder implements FileEncoder {
 
     @Override
     public ConversionResult encode(BufferedImage image, Format format, String originalFileName, ConversionOptions options) throws IOException {
-        String baseName = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
+        // The name the picture takes on the calculator, from the request rather than the file name.
+        String baseName = options.onCalcName() == null || options.onCalcName().isBlank()
+            ? OnCalcName.suggestFrom(format, originalFileName)
+            : options.onCalcName();
         if (baseName.length() > 8) {
             baseName = baseName.substring(0, 8);
         }

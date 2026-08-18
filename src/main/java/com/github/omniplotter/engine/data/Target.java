@@ -123,6 +123,30 @@ public enum Target {
         List.of(Format.ZPIC), Format.ZPIC,
         List.of(), null);
 
+    /** The picture slots a model offers, as an inclusive range. */
+    public record SlotRange(int min, int max) {
+        public boolean contains(int slot) {
+            return slot >= min && slot <= max;
+        }
+    }
+
+    /**
+     * Slot numbers this model accepts for its picture variables.
+     *
+     * <p>Not every calculator has ten. The TI-73 has three, numbered from one; the TI-82 has seven,
+     * numbered from zero. Offering 0-9 everywhere writes files addressing a slot that does not
+     * exist (reference/img2calc/index.html:1288-1289).
+     */
+    public static SlotRange slotRange(Target target) {
+        if (target == TI_73) {
+            return new SlotRange(1, 3);
+        }
+        if (target == TI_82) {
+            return new SlotRange(0, 6);
+        }
+        return new SlotRange(0, 9);
+    }
+
     /** Manufacturer, used to group targets in the UI the way the reference groups its buttons. */
     public enum Brand {
         TI("TI"), CASIO("Casio"), NUMWORKS("NumWorks"), HP("HP"), ZERO("Zero");

@@ -67,3 +67,11 @@
 .flow-pane {
     -fx-padding: 2px 0 0 0;
 }
+
+/* Marks a text field whose contents the calculator would reject. AtlantaFX styles :danger on
+   controls it knows about; the pseudo-class has to be declared for a plain TextField. */
+.text-field:danger {
+    -fx-border-color: -color-danger-emphasis;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+}

@@ -85,6 +85,6 @@ public class ZeroEncoder implements FileEncoder {
         resultStream.write(pixelData.toByteArray());
 
         // Slot-numbered on the device, and the file carries no extension.
-        return new ConversionResult(resultStream.toByteArray(), "pic1");
+        return new ConversionResult(resultStream.toByteArray(), "pic" + options.onCalcNumber());
     }
 }

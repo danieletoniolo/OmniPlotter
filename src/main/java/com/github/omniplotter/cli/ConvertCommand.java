@@ -6,6 +6,7 @@ import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Mode;
+import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
 import com.github.omniplotter.engine.data.Target;
 import picocli.CommandLine.Command;
@@ -63,11 +64,11 @@ public class ConvertCommand implements Callable<Integer> {
     private boolean noKeepRatio;
 
     @Option(names = "--name", paramLabel = "NAME",
-        description = "On-calculator variable name, 8 characters max. Defaults to the file name.")
+        description = "On-calculator variable name. Rules vary by format; see 'formats'. Defaults to the file name.")
     private String onCalcName;
 
     @Option(names = "--number", paramLabel = "N",
-        description = "On-calculator slot for Pic/Image formats (0-9). Default 1.")
+        description = "On-calculator slot for Pic/Image formats. Range depends on the model (TI-73: 1-3, TI-82: 0-6, else 0-9). Default 1.")
     private int onCalcNumber = 1;
 
     @Override
@@ -149,6 +150,22 @@ public class ConvertCommand implements Callable<Integer> {
         }
         options = clamped;
 
+        // Reject an unusable on-calc address before writing anything: the name and the slot are
+        // encoded into the file, so a bad one produces a file the calculator quietly refuses or
+        // installs in the wrong place.
+        if (onCalcName != null) {
+            var problem = OnCalcName.validateName(format, onCalcName);
+            if (problem.isPresent()) {
+                System.err.println(problem.get());
+                return 2;
+            }
+        }
+        var slotProblem = OnCalcName.validateSlot(format, target, onCalcNumber);
+        if (slotProblem.isPresent()) {
+            System.err.println(slotProblem.get());
+            return 2;
+        }
+
         boolean multiple = inputs.size() > 1;
         if (multiple && output != null && output.exists() && !output.isDirectory()) {
             System.err.println("With several inputs, --output must be a directory.");
@@ -177,7 +194,7 @@ public class ConvertCommand implements Callable<Integer> {
 
         // The on-calc name defaults to the input file's name when not given explicitly.
         ConversionOptions perFile = onCalcName == null
-            ? options.withOnCalc(baseName(input.getName()), options.onCalcNumber())
+            ? options.withOnCalc(OnCalcName.suggestFrom(format, input.getName()), options.onCalcNumber())
             : options;
 
         ConversionResult result = EngineApi.convert(bytes, input.getName(), format, perFile);
@@ -203,12 +220,6 @@ public class ConvertCommand implements Callable<Integer> {
         OutputLimits.check(target, format, result.fileBytes().length)
             .ifPresent(warning -> System.err.println("warning: " + warning));
         return true;
-    }
-
-    private static String baseName(String fileName) {
-        int dot = fileName.indexOf('.');
-        String base = dot >= 0 ? fileName.substring(0, dot) : fileName;
-        return base.isEmpty() ? "IMAGE" : base;
     }
 
     private static String ids(List<Format> formats) {
