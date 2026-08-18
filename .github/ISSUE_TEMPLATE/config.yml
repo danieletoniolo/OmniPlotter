@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A file this converter produced is wrong on the calculator
+    url: https://github.com/danieletoniolo/OmniPlotter/issues/new?template=bug_report.yml
+    about: Report it here — byte-exactness against img2calc is the point of this project.
+  - name: The img2calc web tool itself
+    url: https://github.com/TI-Planet/img2calc/issues
+    about: >
+      OmniPlotter is a port of img2calc and reproduces its output deliberately, quirks included.
+      A disagreement with what img2calc does belongs upstream.

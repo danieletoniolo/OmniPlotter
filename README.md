@@ -47,6 +47,12 @@ omniplotter inspect PICT1.g3p
 Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
 tool translates directly into a command here.
 
+The installed application is the command line: arguments mean the CLI, no arguments mean the
+window. `omniplotter setup` links it into `~/.local/bin` under that name — or, on Windows, writes a
+shim and points at the console launcher, since the one the desktop starts has nowhere to print.
+Where the link would not be found, it shows the line to add and asks first rather than editing a
+shell's configuration on its own. `omniplotter doctor` prints where everything ended up.
+
 `inspect` reads a Casio file back apart — un-inverts the header, checks the sizes recorded in
 different places against each other, undoes the CP obfuscation and inflates the pixel data. That is
 the question that actually matters: whether the calculator will open the file.
@@ -110,8 +116,15 @@ Pushing a `v*` tag builds installers for macOS, Windows and Linux and attaches t
 Release. The tag is the version: it is written into the POM, and from there into the jar manifest,
 what `--version` prints, and the installer metadata.
 
-The builds are unsigned. macOS needs right-click → Open on first launch, and Windows SmartScreen
-needs "More info" → "Run anyway".
+Each release carries the three installers, a `SHA256SUMS` to check them against, and
+`omniplotter-<version>-cli.jar` — the command line without JavaFX, small and platform-independent,
+for anyone who already has a JDK 21.
+
+The builds are unsigned, so the first launch is refused on both desktops. On macOS, open System
+Settings → Privacy & Security after the refusal and choose "Open Anyway"; the right-click → Open
+route is no longer reliable on recent versions. From a terminal,
+`xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` does the same. On Windows,
+SmartScreen wants "More info" → "Run anyway".
 
 What is planned after the first release, and what has been deliberately ruled out, is in
 [ROADMAP.md](ROADMAP.md).

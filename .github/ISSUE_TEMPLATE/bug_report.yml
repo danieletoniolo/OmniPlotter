@@ -1,0 +1,61 @@
+name: Bug report
+description: Something produced the wrong file, or did not produce one at all.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most useful report names a format and a target and attaches the image, because that is
+        what makes the failure reproducible here. `omniplotter doctor` prints most of the rest.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From `omniplotter --version`, or the About line of the installer you downloaded.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+
+  - type: input
+    id: conversion
+    attributes:
+      label: Format and target
+      description: The identifiers, as `omniplotter formats` and `omniplotter targets` print them.
+      placeholder: "cp.g3p on cg"
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: >
+        What you did, what came out, and what you expected instead. If the calculator refused the
+        file, say what it showed — "the calculator would not open it" is the failure this project
+        exists to prevent, and worth reporting even without an error message.
+    validations:
+      required: true
+
+  - type: textarea
+    id: image
+    attributes:
+      label: The image
+      description: >
+        Attach it if you can. Conversion depends on the exact pixels, so a description of the
+        picture is rarely enough to reproduce the problem.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: >
+        From the command line, whatever it printed. From the window, the log folder button in the
+        bottom bar opens the directory the log file is in.
+      render: text
