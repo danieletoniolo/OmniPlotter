@@ -90,9 +90,9 @@ case "${COMMAND}" in
         mkdir -p "${OUT}"
 
         case "$(uname -s)" in
-            Darwin) TYPE=dmg ;;
-            Linux)  TYPE=deb ;;
-            *)      TYPE=msi ;;
+            Darwin) TYPE=dmg; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.icns" ;;
+            Linux)  TYPE=deb; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.png" ;;
+            *)      TYPE=msi; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.ico" ;;
         esac
 
         # A trimmed runtime instead of the whole JDK. The app is non-modular (JavaFX lives in the
@@ -126,6 +126,7 @@ case "${COMMAND}" in
             --input "${STAGE}" \
             --main-jar "$(basename "${JAR}")" \
             --main-class com.github.omniplotter.Main \
+            --icon "${ICON}" \
             --runtime-image "${RUNTIME}" \
             --dest "${OUT}" \
             --type "${TYPE}" \

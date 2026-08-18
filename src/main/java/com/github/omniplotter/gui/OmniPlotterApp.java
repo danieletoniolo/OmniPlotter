@@ -31,6 +31,12 @@ public class OmniPlotterApp extends Application {
 
         stage.setScene(scene);
         stage.setTitle("OmniPlotter");
+        // jpackage sets the installed app's icon; this is for the dock and task switcher when
+        // running straight from the jar.
+        var icon = OmniPlotterApp.class.getResourceAsStream("/icon/icon.png");
+        if (icon != null) {
+            stage.getIcons().add(new javafx.scene.image.Image(icon));
+        }
         stage.setMinWidth(900);
         stage.setMinHeight(620);
         stage.show();

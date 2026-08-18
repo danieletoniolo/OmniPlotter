@@ -91,6 +91,7 @@ src/main/java/com/github/omniplotter/
     inspect/             reads Casio files back apart
     util/                PixelBuffer, Palette, ByteSeq, EncoderUtils
 tools/refgen/            the reference encoders and the golden-vector generator
+tools/icon/              regenerates the app icon
 reference/img2calc/      img2calc itself, as a pinned submodule
 ```
 
