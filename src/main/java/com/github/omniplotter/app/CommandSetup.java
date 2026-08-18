@@ -76,6 +76,31 @@ public final class CommandSetup {
     }
 
     /**
+     * Where a completion script goes to be picked up without anyone configuring anything.
+     *
+     * <p>bash-completion reads this directory on its own, on both Linux and macOS. Windows has no
+     * equivalent worth writing to, so nothing is generated there.
+     */
+    public static Path completionFile() {
+        String data = System.getenv("XDG_DATA_HOME");
+        Path base = data == null || data.isBlank()
+            ? Path.of(System.getProperty("user.home"), ".local", "share")
+            : Path.of(data);
+        return base.resolve("bash-completion").resolve("completions").resolve(COMMAND);
+    }
+
+    /** Writes the completion script, or reports that this platform does not take one. */
+    public static Optional<Path> installCompletion(String script) throws IOException {
+        if (AppPaths.isWindows()) {
+            return Optional.empty();
+        }
+        Path file = completionFile();
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, script);
+        return Optional.of(file);
+    }
+
+    /**
      * Points {@link #linkPath()} at the running launcher.
      *
      * <p>A symbolic link where symbolic links are free, and a one-line batch file on Windows, where
@@ -99,7 +124,11 @@ public final class CommandSetup {
     }
 
     public static boolean uninstall() throws IOException {
-        return Files.deleteIfExists(linkPath());
+        boolean removed = Files.deleteIfExists(linkPath());
+        if (!AppPaths.isWindows()) {
+            Files.deleteIfExists(completionFile());
+        }
+        return removed;
     }
 
     /** Whether the shell would find something in {@code directory} without being told about it. */

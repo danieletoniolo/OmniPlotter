@@ -1,6 +1,7 @@
 package com.github.omniplotter.cli;
 
 import com.github.omniplotter.app.CommandSetup;
+import picocli.AutoComplete;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -47,6 +48,7 @@ public class SetupCommand implements Callable<Integer> {
         Path target = CommandSetup.consoleLauncher(launcher.get());
         CommandSetup.Outcome outcome = CommandSetup.install(target);
         System.out.println("Linked " + outcome.link() + " -> " + target);
+        completions();
 
         if (outcome.onPath()) {
             System.out.println("It is on your PATH: open a new terminal and run 'omniplotter --help'.");
@@ -70,9 +72,41 @@ public class SetupCommand implements Callable<Integer> {
         return 0;
     }
 
+    /**
+     * Generates the completion script from the parser itself.
+     *
+     * <p>Derived rather than written by hand, so a subcommand or option added later is completed
+     * without anyone remembering to update a second list.
+     */
+    private void completions() {
+        try {
+            String script = AutoComplete.bash(CommandSetup.COMMAND, Cli.parser());
+            CommandSetup.installCompletion(script).ifPresent(file -> {
+                System.out.println("Wrote completions to " + file + ".");
+                // zsh reads bash completions only after bashcompinit, which it does not do by
+                // default, so the two lines are worth printing rather than assuming.
+                if ("zsh".equals(shellName())) {
+                    System.out.println("For zsh, add to ~/.zshrc:");
+                    System.out.println("    autoload -U +X bashcompinit && bashcompinit");
+                    System.out.println("    source " + file);
+                }
+            });
+        } catch (IOException | RuntimeException e) {
+            // Completion is a convenience. Failing to write it should not fail the setup that
+            // actually put the command on PATH.
+            System.out.println("Could not write completions: " + e.getMessage());
+        }
+    }
+
+    private static String shellName() {
+        String shell = System.getenv("SHELL");
+        return shell == null ? "" : Path.of(shell).getFileName().toString();
+    }
+
     private Integer remove() throws IOException {
         if (CommandSetup.uninstall()) {
-            System.out.println("Removed " + CommandSetup.linkPath() + ".");
+            System.out.println("Removed " + CommandSetup.linkPath()
+                + " and any completion script beside it.");
             System.out.println("Any line added to your shell startup file is still there.");
         } else {
             System.out.println("Nothing to remove: " + CommandSetup.linkPath() + " does not exist.");
