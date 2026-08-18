@@ -1,3 +1,22 @@
+/*
+ * OmniPlotter — convert images to calculator picture and script formats.
+ * Copyright (C) 2026 Daniele Toniolo
+ *
+ * Derived from TI-Planet's img2calc (https://github.com/TI-Planet/img2calc),
+ * by Xavier Andreani (@critor) and Adrien Bertrand (@Adriweb).
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.github.omniplotter.engine.encoder;
 
 import com.github.omniplotter.engine.data.ConversionOptions;

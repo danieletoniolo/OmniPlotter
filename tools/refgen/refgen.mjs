@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// OmniPlotter — convert images to calculator picture and script formats.
+// Copyright (C) 2026 Daniele Toniolo
+//
+// Derived from TI-Planet's img2calc (https://github.com/TI-Planet/img2calc),
+// by Xavier Andreani (@critor) and Adrien Bertrand (@Adriweb).
+//
+// Licensed under the GNU General Public License v3 or later. See LICENSE.
 // Generates the golden vectors the Java encoders are checked against.
 //
 //   node tools/refgen/refgen.mjs        (or ./omniplotter.sh refgen)

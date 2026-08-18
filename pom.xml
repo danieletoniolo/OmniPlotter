@@ -11,6 +11,15 @@
     <name>OmniPlotter</name>
     <description>Convert images to calculator picture and script formats.</description>
 
+    <licenses>
+        <license>
+            <name>GNU General Public License v3.0 or later</name>
+            <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+            <distribution>repo</distribution>
+            <comments>Inherited from TI-Planet's img2calc, of which this is a derivative work.</comments>
+        </license>
+    </licenses>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>

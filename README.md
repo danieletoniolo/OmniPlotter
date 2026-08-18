@@ -100,6 +100,16 @@ reference/img2calc/      img2calc itself, as a pinned submodule
   ends, and `zpic` wraps on the canvas width rather than the image width. These are reproduced
   deliberately — the goal is files that behave exactly like img2calc's.
 
-## Credits
+## License
 
-img2calc is by Xavier Andréani (@critor) and Adrien Bertrand (@Adriweb).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+OmniPlotter is a derivative work of [TI-Planet's img2calc](https://github.com/TI-Planet/img2calc),
+which is GPL-3.0, so it inherits that licence. The parts actually derived from it carry an
+attribution header: the encoders, the ImageMagick-equivalent operators and preprocessing pipeline,
+the format metadata ported from its tables, and the reference generator under `tools/refgen/`. The
+CLI, the window and the build are original.
+
+img2calc is by Xavier Andréani ([@critor](https://github.com/critor)) and Adrien Bertrand
+([@Adriweb](https://github.com/Adriweb)). This port would not have been possible, or verifiable,
+without their source being open.

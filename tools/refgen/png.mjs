@@ -1,3 +1,10 @@
+// OmniPlotter — convert images to calculator picture and script formats.
+// Copyright (C) 2026 Daniele Toniolo
+//
+// Derived from TI-Planet's img2calc (https://github.com/TI-Planet/img2calc),
+// by Xavier Andreani (@critor) and Adrien Bertrand (@Adriweb).
+//
+// Licensed under the GNU General Public License v3 or later. See LICENSE.
 // Minimal PNG reader for the reference generator.
 //
 // It exists so refgen can decode tmp/palcp.png and tmp/pal8ci.png on its own. The browser tool

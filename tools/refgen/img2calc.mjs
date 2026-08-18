@@ -1,3 +1,10 @@
+// OmniPlotter — convert images to calculator picture and script formats.
+// Copyright (C) 2026 Daniele Toniolo
+//
+// Derived from TI-Planet's img2calc (https://github.com/TI-Planet/img2calc),
+// by Xavier Andreani (@critor) and Adrien Bertrand (@Adriweb).
+//
+// Licensed under the GNU General Public License v3 or later. See LICENSE.
 // Verbatim extraction of the img2calc encoders from reference/img2calc/index.html.
 //
 // The function bodies below are transcribed as literally as possible from the reference so that a
