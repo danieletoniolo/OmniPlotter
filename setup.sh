@@ -19,7 +19,7 @@ MAVEN_DIR="${TOOLS_DIR}/maven"
 JDK_FEATURE=21
 MAVEN_VERSION=3.9.9
 
-echo "=== CasioPicture setup ==="
+echo "=== OmniPlotter setup ==="
 
 # --- 1. Identify the platform -------------------------------------------------------------------
 
@@ -76,7 +76,7 @@ fi
 
 chmod +x "${JAVA_HOME}/bin/"* 2>/dev/null || true
 chmod +x "${MAVEN_DIR}/bin/"* 2>/dev/null || true
-chmod +x "${SCRIPT_DIR}/casiopicture.sh"
+chmod +x "${SCRIPT_DIR}/omniplotter.sh"
 
 # --- 4. Dependencies ----------------------------------------------------------------------------
 #
@@ -90,9 +90,9 @@ cd "${SCRIPT_DIR}"
 
 echo ""
 echo "=== Ready ==="
-echo "  ./casiopicture.sh run              open the app"
-echo "  ./casiopicture.sh cli --help       command line usage"
-echo "  ./casiopicture.sh test             run the test suite"
-echo "  ./casiopicture.sh package          build a native installer"
+echo "  ./omniplotter.sh run              open the app"
+echo "  ./omniplotter.sh cli --help       command line usage"
+echo "  ./omniplotter.sh test             run the test suite"
+echo "  ./omniplotter.sh package          build a native installer"
 echo ""
 echo "Everything lives in this directory: tools/ (JDK, Maven), .mvn/repo and libs/ (dependencies)."

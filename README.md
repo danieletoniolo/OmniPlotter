@@ -1,4 +1,4 @@
-# CasioPicture
+# OmniPlotter
 
 A desktop app that converts images into the picture and script formats graphing calculators can
 open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` / `.8ca` / `.8ci` / `.8xi` and friends, the Zero
@@ -18,20 +18,20 @@ Nothing is installed system-wide and your `~/.m2` is never touched, so the check
 self-contained and safe to delete.
 
 ```bash
-./casiopicture.sh run          # open the app
-./casiopicture.sh cli --help   # command line
-./casiopicture.sh test         # test suite
-./casiopicture.sh package      # native installer for this platform
+./omniplotter.sh run          # open the app
+./omniplotter.sh cli --help   # command line
+./omniplotter.sh test         # test suite
+./omniplotter.sh package      # native installer for this platform
 ```
 
 ## Command line
 
 ```bash
-casiopicture convert photo.png -f cp.g3p --name PICT1
-casiopicture convert *.jpg -f kandinsky.py -o ./out
-casiopicture formats --target cg
-casiopicture targets --mode var
-casiopicture inspect PICT1.g3p
+omniplotter convert photo.png -f cp.g3p --name PICT1
+omniplotter convert *.jpg -f kandinsky.py -o ./out
+omniplotter formats --target cg
+omniplotter targets --mode var
+omniplotter inspect PICT1.g3p
 ```
 
 Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
@@ -53,7 +53,7 @@ literally as possible, and generates **591 golden vectors** — every format, ac
 patterns. `ReferenceVectorTest` feeds the Java encoders the identical pixels and asserts byte
 equality.
 
-**All 591 match.** Regenerate them with `./casiopicture.sh refgen` after touching the reference.
+**All 591 match.** Regenerate them with `./omniplotter.sh refgen` after touching the reference.
 
 That covers the encoders, which turn pixels into a file. The stage before it — resizing, colour
 reduction, palette remapping — is ImageMagick in the reference and reimplemented in Java here, so it
@@ -69,7 +69,7 @@ unless `+dither` was passed.
 ## Layout
 
 ```
-src/main/java/com/github/casiopicture/
+src/main/java/com/github/omniplotter/
   Main.java              arguments mean CLI, none means UI
   cli/                   convert, formats, targets, inspect
   gui/                   JavaFX window

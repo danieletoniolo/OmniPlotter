@@ -5,10 +5,10 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.github.casiopicture</groupId>
-    <artifactId>casiopicture</artifactId>
+    <groupId>com.github.omniplotter</groupId>
+    <artifactId>omniplotter</artifactId>
     <version>1.0.0</version>
-    <name>CasioPicture</name>
+    <name>OmniPlotter</name>
     <description>Convert images to calculator picture and script formats.</description>
 
     <properties>
@@ -22,7 +22,7 @@
         <junit.version>5.11.3</junit.version>
 
         <!-- One entry point for both faces of the app: arguments mean CLI, none means UI. -->
-        <app.mainClass>com.github.casiopicture.Main</app.mainClass>
+        <app.mainClass>com.github.omniplotter.Main</app.mainClass>
     </properties>
 
     <!--
@@ -135,7 +135,7 @@
     </dependencies>
 
     <build>
-        <finalName>casiopicture</finalName>
+        <finalName>omniplotter</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -149,7 +149,7 @@
                 <version>3.5.2</version>
             </plugin>
 
-            <!-- Fat jar, so `casiopicture.sh cli` and jpackage both have a single artifact. -->
+            <!-- Fat jar, so `omniplotter.sh cli` and jpackage both have a single artifact. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>

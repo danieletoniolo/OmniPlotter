@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generates the golden vectors the Java encoders are checked against.
 //
-//   node tools/refgen/refgen.mjs        (or ./casiopicture.sh refgen)
+//   node tools/refgen/refgen.mjs        (or ./omniplotter.sh refgen)
 //
 // For every (format x pattern x size) it runs the reference encoder from img2calc.mjs and writes
 // the resulting bytes to src/test/resources/ref/vectors/, alongside the exact RGBA input in
