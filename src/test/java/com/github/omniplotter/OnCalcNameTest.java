@@ -110,6 +110,30 @@ class OnCalcNameTest {
     }
 
     @Test
+    void im8cComesWithAScriptThatDrawsIt() throws Exception {
+        var result = EngineApi.convert(image(), "x.png", Format.TI_8XV,
+            ConversionOptions.defaults(Target.TI_8X_PYTHON, Format.TI_8XV).withOnCalc("Photo1", 1));
+
+        assertEquals("Photo1.8xv", result.suggestedFileName());
+        assertEquals(1, result.extras().size());
+
+        var companion = result.extras().get(0);
+        assertEquals("Photo1.py", companion.name());
+        String script = new String(companion.bytes(), java.nio.charset.StandardCharsets.US_ASCII);
+        // The script has to name the variable it just wrote, or it draws nothing.
+        assertTrue(script.contains("drawImage(\"Photo1\", 0, 30)"), script);
+        assertEquals(2, result.allFiles().size());
+    }
+
+    @Test
+    void formatsWithoutACompanionProduceOneFile() throws Exception {
+        var result = EngineApi.convert(image(), "x.png", Format.CP_G3P,
+            ConversionOptions.defaults(Target.CASIO_CG, Format.CP_G3P));
+        assertTrue(result.extras().isEmpty());
+        assertEquals(1, result.allFiles().size());
+    }
+
+    @Test
     void zpicCarriesItsSlotInTheName() throws Exception {
         var result = EngineApi.convert(image(), "x.png", Format.ZPIC,
             ConversionOptions.defaults(Target.ZERO, Format.ZPIC).withOnCalc("X", 4));

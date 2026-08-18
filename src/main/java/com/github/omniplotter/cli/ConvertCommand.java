@@ -215,6 +215,13 @@ public class ConvertCommand implements Callable<Integer> {
             input.getName(), destination, format.id(),
             perFile.width(), perFile.height(), result.fileBytes().length);
 
+        // Some formats come with a companion file; write it beside the main one.
+        for (var extra : result.extras()) {
+            Path beside = destination.toAbsolutePath().getParent().resolve(extra.name());
+            Files.write(beside, extra.bytes());
+            System.out.printf("%s -> %s (%d bytes)%n", input.getName(), beside, extra.bytes().length);
+        }
+
         // The file is valid but may not fit on the device. Warn and still write it, as the
         // reference does: the user may well be targeting a firmware with more room.
         OutputLimits.check(target, format, result.fileBytes().length)

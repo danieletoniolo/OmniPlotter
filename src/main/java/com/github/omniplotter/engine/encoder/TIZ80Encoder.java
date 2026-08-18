@@ -53,7 +53,20 @@ public class TIZ80Encoder implements FileEncoder {
             default -> throw new IllegalArgumentException("Unsupported format for TIZ80Encoder: " + format);
         };
 
-        return new ConversionResult(encodedData, calcName + "." + format.getFileExtension());
+        String fileName = calcName + "." + format.getFileExtension();
+        if (format == Format.TI_8XV) {
+            // The variable on its own does not draw anything, so the reference also hands over the
+            // two lines that put it on screen. Upstream now calls this format im8c_rle.8xv and has
+            // added .8xv2 variants for the TI-84 Evo, which this port does not cover yet.
+            String sample = "from ti_graphics import drawImage\n"
+                + "from ti_system import disp_wait\n\n"
+                + "drawImage(\"" + calcName + "\", 0, 30)\n"
+                + "disp_wait()";
+            return new ConversionResult(encodedData, fileName, List.of(
+                new ConversionResult.OutputFile(calcName + ".py",
+                    sample.getBytes(StandardCharsets.US_ASCII))));
+        }
+        return new ConversionResult(encodedData, fileName);
     }
 
     private byte[] encodeIm8c(BufferedImage image, Format format, String calcName, int num) throws IOException {

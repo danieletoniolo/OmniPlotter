@@ -77,8 +77,15 @@ public class ConversionJob {
         }
         ConversionResult result = EngineApi.convert(src, file.getName(), format, options);
         Files.createDirectories(outputDir);
-        Path destination = outputDir.resolve(result.suggestedFileName());
-        Files.write(destination, result.fileBytes());
+        // allFiles() is the main output plus any companion the format wants alongside it.
+        Path destination = null;
+        for (var out : result.allFiles()) {
+            Path path = outputDir.resolve(out.name());
+            Files.write(path, out.bytes());
+            if (destination == null) {
+                destination = path;
+            }
+        }
         return destination;
     }
 
