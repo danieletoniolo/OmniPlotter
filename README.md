@@ -31,6 +31,9 @@ git submodule update --init
 ./omniplotter.sh package      # native installer for this platform
 ```
 
+These also work against a JDK and Maven already on your PATH, without `setup.sh` — which is how CI
+runs them, so there is only one way to build.
+
 ## Command line
 
 ```bash
@@ -99,6 +102,15 @@ reference/img2calc/      img2calc itself, as a pinned submodule
   while the file stores truncated bytes, `im8c` drops literal pixels still buffered when the image
   ends, and `zpic` wraps on the canvas width rather than the image width. These are reproduced
   deliberately — the goal is files that behave exactly like img2calc's.
+
+## Releases
+
+Pushing a `v*` tag builds installers for macOS, Windows and Linux and attaches them to a GitHub
+Release. The tag is the version: it is written into the POM, and from there into the jar manifest,
+what `--version` prints, and the installer metadata.
+
+The builds are unsigned. macOS needs right-click → Open on first launch, and Windows SmartScreen
+needs "More info" → "Run anyway".
 
 ## License
 

@@ -13,7 +13,7 @@ import picocli.CommandLine.Command;
 @Command(
     name = "omniplotter",
     mixinStandardHelpOptions = true,
-    version = "omniplotter 1.0.0",
+    versionProvider = Cli.Version.class,
     description = "Convert images to calculator picture and script formats.",
     subcommands = {
         ConvertCommand.class,
@@ -34,6 +34,20 @@ public class Cli implements Runnable {
         System.exit(new CommandLine(new Cli())
             .setCaseInsensitiveEnumValuesAllowed(true)
             .execute(args));
+    }
+
+    /**
+     * Reports the version recorded in the jar manifest at build time.
+     *
+     * <p>Reading it back rather than repeating it here keeps the POM the only place the version is
+     * written, so a release tag cannot end up disagreeing with what {@code --version} prints.
+     */
+    static class Version implements CommandLine.IVersionProvider {
+        @Override
+        public String[] getVersion() {
+            String version = Cli.class.getPackage().getImplementationVersion();
+            return new String[]{"omniplotter " + (version == null ? "(development build)" : version)};
+        }
     }
 
     /** Shared parser for the {@code --mode} option. */

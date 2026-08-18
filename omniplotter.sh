@@ -7,19 +7,36 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Prefer the toolchain setup.sh vendored into tools/; fall back to whatever is on PATH. The fallback
+# is what lets CI run these exact commands after actions/setup-java, instead of maintaining a second
+# way to build that can drift from this one.
 case "$(uname -s)" in
-    Darwin) JAVA_HOME="${SCRIPT_DIR}/tools/jdk/Contents/Home" ;;
-    *)      JAVA_HOME="${SCRIPT_DIR}/tools/jdk" ;;
+    Darwin) LOCAL_JDK="${SCRIPT_DIR}/tools/jdk/Contents/Home" ;;
+    *)      LOCAL_JDK="${SCRIPT_DIR}/tools/jdk" ;;
 esac
-export JAVA_HOME
-export PATH="${SCRIPT_DIR}/tools/maven/bin:${JAVA_HOME}/bin:${PATH}"
+
+if [ -x "${LOCAL_JDK}/bin/java" ]; then
+    export JAVA_HOME="${LOCAL_JDK}"
+    export PATH="${JAVA_HOME}/bin:${PATH}"
+elif ! command -v java >/dev/null 2>&1; then
+    echo "No JDK found: run ./setup.sh, or install one and put java on PATH." >&2
+    exit 1
+fi
+
+if [ -x "${SCRIPT_DIR}/tools/maven/bin/mvn" ]; then
+    export PATH="${SCRIPT_DIR}/tools/maven/bin:${PATH}"
+elif ! command -v mvn >/dev/null 2>&1; then
+    echo "No Maven found: run ./setup.sh, or install one and put mvn on PATH." >&2
+    exit 1
+fi
 
 JAR="${SCRIPT_DIR}/target/omniplotter.jar"
 
-if [ ! -x "${JAVA_HOME}/bin/java" ] || [ ! -x "${SCRIPT_DIR}/tools/maven/bin/mvn" ]; then
-    echo "Toolchain not found in tools/. Run ./setup.sh first." >&2
-    exit 1
-fi
+# One source of truth for the version: the POM. jpackage is told the same thing.
+project_version() {
+    mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' \
+        --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec 2>/dev/null | tail -1
+}
 
 ensure_jar() {
     if [ ! -f "${JAR}" ]; then
@@ -98,9 +115,12 @@ case "${COMMAND}" in
         mkdir -p "${STAGE}"
         cp "${JAR}" "${STAGE}/"
 
+        VERSION="${OMNIPLOTTER_VERSION:-$(project_version)}"
+        echo "Packaging version ${VERSION}"
+
         jpackage \
             --name OmniPlotter \
-            --app-version 1.0.0 \
+            --app-version "${VERSION}" \
             --description "Convert images to calculator picture and script formats" \
             --vendor omniplotter \
             --input "${STAGE}" \
