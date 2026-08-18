@@ -57,6 +57,17 @@ jobs:
           path: target/installer/*
           if-no-files-found: error
 
+      # The command-line jar carries no JavaFX, so unlike the installers it is the same file
+      # everywhere and only needs building once. It is the way in for anyone who already has a
+      # JDK 21, wants only the CLI, or is packaging this for a distribution.
+      - name: Upload the command-line jar
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-jar
+          path: target/omniplotter-*-cli.jar
+          if-no-files-found: error
+
   publish:
     name: Publish release
     needs: installers
@@ -68,17 +79,37 @@ jobs:
           path: installers
           merge-multiple: true
 
+      # Nothing signs these builds, so a checksum is what is left for telling a good download from
+      # a damaged or substituted one. It costs one line and it is the honest thing to publish.
+      - name: Checksums
+        run: |
+          cd installers
+          sha256sum * > ../SHA256SUMS
+          mv ../SHA256SUMS .
+          cat SHA256SUMS
+
       - name: Create the release
         uses: softprops/action-gh-release@v2
         with:
           files: installers/*
           generate_release_notes: true
           # None of the installers are signed, so say so rather than let the warnings look like a
-          # broken download.
+          # broken download. The macOS wording matters: the right-click route stopped being
+          # reliable, and someone following an instruction that no longer works concludes the
+          # download is broken.
           body: |
             ## Install
 
-            Download the installer for your platform below.
+            Download the installer for your platform below, or `omniplotter-*-cli.jar` if you have
+            a JDK 21 and only want the command line.
 
-            The builds are unsigned. On macOS the first launch needs right-click → Open, and on
-            Windows SmartScreen asks for "More info" → "Run anyway".
+            These builds are not signed, so both desktops will object the first time.
+
+            **macOS** — the first launch is blocked. Open System Settings → Privacy & Security,
+            find the message about OmniPlotter and choose "Open Anyway". From a terminal,
+            `xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` does the same thing.
+
+            **Windows** — SmartScreen asks; choose "More info" → "Run anyway".
+
+            `SHA256SUMS` lists the checksum of every file here, which is what there is to verify
+            against in the absence of a signature.

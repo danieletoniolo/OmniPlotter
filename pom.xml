@@ -185,7 +185,66 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.6.0</version>
                 <executions>
+                    <!--
+                        The command-line jar, built first and deliberately: shade replaces the main
+                        artifact, so anything running after the fat jar would take that as its
+                        input and the exclusion below would have nothing left to exclude.
+
+                        Nothing outside gui/ refers to JavaFX, so dropping it leaves a small jar
+                        that runs the CLI on any platform — unlike the fat jar, whose JavaFX natives
+                        are chosen by the profile that built it. That is what gets attached to a
+                        release for people who already have a JDK.
+                    -->
                     <execution>
+                        <id>cli-jar</id>
+                        <phase>package</phase>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>cli</shadedClassifierName>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.openjfx:*</exclude>
+                                    <exclude>io.github.mkpaz:*</exclude>
+                                    <exclude>org.kordamp.ikonli:*</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>module-info.class</exclude>
+                                    </excludes>
+                                </filter>
+                                <!-- The window's own classes go too. Without JavaFX they cannot
+                                     load, and a jar that carries code it can never run invites
+                                     someone to wonder why it does not start. -->
+                                <filter>
+                                    <artifact>${project.groupId}:${project.artifactId}</artifact>
+                                    <excludes>
+                                        <exclude>com/github/omniplotter/gui/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${app.mainClass}</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Title>${project.name}</Implementation-Title>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                        </configuration>
+                    </execution>
+
+                    <execution>
+                        <id>fat-jar</id>
                         <phase>package</phase>
                         <goals><goal>shade</goal></goals>
                         <configuration>

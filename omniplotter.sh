@@ -89,15 +89,32 @@ case "${COMMAND}" in
         rm -rf "${OUT}"
         mkdir -p "${OUT}"
 
-        # Windows gets a second, console launcher; see packaging/omniplotter.properties. The other
-        # two do not: their main launcher already prints to a terminal, and on a case-insensitive
-        # macOS filesystem `omniplotter` and `OmniPlotter` are the same file, so jpackage refuses.
+        # Per-platform extras:
+        #
+        #   macOS   a stable bundle identifier, so every version is recognised as the same
+        #           application rather than as a new one that happens to share a name.
+        #
+        #   Windows a fixed upgrade UUID, which is what makes the next .msi replace this one
+        #           instead of installing beside it. It has to stay identical for the life of the
+        #           product and cannot be corrected after the first release, since it is what
+        #           already-installed copies were recorded under. Plus a Start menu entry and a
+        #           second, console launcher;
+        #           see packaging/omniplotter.properties. macOS and Linux do not get one: their
+        #           launcher already prints to a terminal, and on a case-insensitive filesystem
+        #           `omniplotter` collides with `OmniPlotter` inside the bundle.
+        #
+        #   Linux   a desktop entry, so the .deb leaves something in the application menu rather
+        #           than only a directory under /opt.
         EXTRA=()
         case "$(uname -s)" in
-            Darwin) TYPE=dmg; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.icns" ;;
-            Linux)  TYPE=deb; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.png" ;;
+            Darwin) TYPE=dmg; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.icns"
+                    EXTRA=(--mac-package-identifier com.github.omniplotter) ;;
+            Linux)  TYPE=deb; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.png"
+                    EXTRA=(--linux-shortcut) ;;
             *)      TYPE=msi; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.ico"
-                    EXTRA=(--add-launcher "omniplotter=${SCRIPT_DIR}/packaging/omniplotter.properties") ;;
+                    EXTRA=(--win-upgrade-uuid 3B4080D2-5F04-48BC-A0D9-E263FC4948C6
+                           --win-menu
+                           --add-launcher "omniplotter=${SCRIPT_DIR}/packaging/omniplotter.properties") ;;
         esac
 
         # A trimmed runtime instead of the whole JDK. The app is non-modular (JavaFX lives in the
