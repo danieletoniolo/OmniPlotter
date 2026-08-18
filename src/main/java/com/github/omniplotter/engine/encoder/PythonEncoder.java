@@ -262,13 +262,14 @@ public class PythonEncoder implements FileEncoder {
         py.append("      cw = min(c, w - x)\n");
         py.append("      if mv != itransp:\n");
 
-        // Mirrors the reference's if / if-else chain exactly. ti_draw_cx is tested by a standalone
-        // `if`, so for that format its branch runs *and* the trailing `else` runs after it.
+        // One branch per format. This used to be a standalone `if` for ti_draw_cx followed by a
+        // second `if` chain, which meant ti_draw_cx also fell through to the trailing `else` and
+        // emitted a second, wrong fill_rect. The reference carried that bug and this port
+        // reproduced it; upstream fixed it in 921f491 and the chain is now properly linked.
         if (format == Format.TI_DRAW_CX_PY) {
             py.append("        set_color(pal[mv])\n");
             py.append("        fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy)\n");
-        }
-        if (format == Format.TI_DRAW_CE_PY) {
+        } else if (format == Format.TI_DRAW_CE_PY) {
             py.append("        set_color(*pal[mv])\n");
             py.append(target == Target.TI_8X_ONLINE
                 ? "        fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy)\n"

@@ -17,6 +17,13 @@ Downloads a JDK and Maven into `tools/` and resolves every dependency into `.mvn
 Nothing is installed system-wide and your `~/.m2` is never touched, so the checkout is
 self-contained and safe to delete.
 
+Building and testing need nothing else. Regenerating the reference vectors additionally needs the
+img2calc submodule, which a plain clone does not fetch:
+
+```bash
+git submodule update --init
+```
+
 ```bash
 ./omniplotter.sh run          # open the app
 ./omniplotter.sh cli --help   # command line
@@ -47,8 +54,8 @@ These containers carry the same length in several places plus checksums derived 
 byte and the calculator refuses the file, with no indication of why. So the conversion is checked
 against the original rather than reasoned about:
 
-`tools/refgen/refgen.mjs` contains the img2calc encoders transcribed from `tmp/index.html` as
-literally as possible, and generates **591 golden vectors** — every format, across a range of sizes
+`tools/refgen/img2calc.mjs` contains the img2calc encoders transcribed from its `index.html` as
+literally as possible, and `refgen.mjs` generates **591 golden vectors** — every format, across a range of sizes
 (including deliberately awkward ones: 1×1, odd widths, sizes that are not multiples of 8) and pixel
 patterns. `ReferenceVectorTest` feeds the Java encoders the identical pixels and asserts byte
 equality.
@@ -81,7 +88,7 @@ src/main/java/com/github/omniplotter/
     inspect/             reads Casio files back apart
     util/                PixelBuffer, Palette, ByteSeq, EncoderUtils
 tools/refgen/            the reference encoders and the golden-vector generator
-tmp/                     img2calc itself, kept so the vectors can be regenerated
+reference/img2calc/      img2calc itself, as a pinned submodule
 ```
 
 ## Notes

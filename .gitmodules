@@ -1,0 +1,3 @@
+[submodule "reference/img2calc"]
+	path = reference/img2calc
+	url = https://github.com/TI-Planet/img2calc

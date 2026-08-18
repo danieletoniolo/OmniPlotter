@@ -1,4 +1,4 @@
-// Verbatim extraction of the img2calc encoders from tmp/index.html.
+// Verbatim extraction of the img2calc encoders from reference/img2calc/index.html.
 //
 // The function bodies below are transcribed as literally as possible from the reference so that a
 // mismatch against the Java port is always a Java bug and never a transcription artefact. Only
@@ -12,7 +12,7 @@
 // The reference reads `format`, `target`, `global_paletteArray` and `global_inFileName` from module
 // scope, so they stay module-scoped here too; `configure()` sets them before each call.
 //
-// Source line numbers refer to tmp/index.html.
+// Source line numbers refer to reference/img2calc/index.html.
 
 import zlib from 'node:zlib';
 
@@ -457,7 +457,7 @@ export function handleOutImgPythonRLE(img, img_a) {
       python +=      '        set_color(pal[mv])\n';
       python +=      '        fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy)\n';
     }
-    if (format === 'ti_draw_ce.py') {
+    else if (format === 'ti_draw_ce.py') {
       python +=      '        set_color(*pal[mv])\n';
       if (target === '8xonline')
         python +=    '        fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy)\n';

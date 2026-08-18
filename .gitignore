@@ -46,10 +46,6 @@ build/
 /tools/jdk/
 /tools/maven/
 
-### img2calc reference (kept: refgen.mjs reads it to regenerate golden vectors) ###
-### The 4 MB ImageMagick WASM build is not needed for that, so it stays out.  ###
-/tmp/wasm-imagemagick/
-/tmp/logo.png
 ### Logs ###
 *.log
 

@@ -57,8 +57,9 @@ case "${COMMAND}" in
             echo "Node.js is required to regenerate the reference vectors." >&2
             exit 1
         fi
-        if [ ! -f "${SCRIPT_DIR}/tmp/index.html" ]; then
-            echo "tmp/index.html (the img2calc reference) is missing." >&2
+        if [ ! -f "${SCRIPT_DIR}/reference/img2calc/index.html" ]; then
+            echo "The img2calc reference submodule is not checked out." >&2
+            echo "Run: git submodule update --init" >&2
             exit 1
         fi
         node "${SCRIPT_DIR}/tools/refgen/refgen.mjs"

@@ -34,7 +34,6 @@ def draw_image(rle, x0, y0, w, pal, zoomx=1, zoomy=1, itransp=-1):
       if mv != itransp:
         set_color(pal[mv])
         fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy)
-        fill_rect(x0 + x*zoomx, y0, cw*zoomx, zoomy, pal[mv])
       c -= cw
       x = (x + cw) % w
       y0 += x == 0 and zoomy

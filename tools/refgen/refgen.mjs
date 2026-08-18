@@ -21,6 +21,9 @@ import * as ref from './img2calc.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'src/test/resources/ref');
+// img2calc itself, as a pinned submodule. Only the palette images are read from it; the
+// encoder logic lives in img2calc.mjs, transcribed by hand from its index.html.
+const REFERENCE = path.join(ROOT, 'reference/img2calc');
 
 // The target matters for a handful of formats: it switches import lines, the ti_draw_ce fill_rect
 // offsets, and whether stringToPythonBytes may emit octal escapes. These are the defaults the
@@ -140,8 +143,8 @@ const LARGE_PATTERNS = ['gradient', 'diagonal'];
 // --- run -------------------------------------------------------------------------------------
 
 const palettes = {
-  'pal8ci.png': readPng(path.join(ROOT, 'tmp/pal8ci.png')),
-  'palcp.png': readPng(path.join(ROOT, 'tmp/palcp.png')),
+  'pal8ci.png': readPng(path.join(REFERENCE, 'pal8ci.png')),
+  'palcp.png': readPng(path.join(REFERENCE, 'palcp.png')),
 };
 for (const [name, p] of Object.entries(palettes)) {
   console.log(`palette ${name}: ${p.width}x${p.height} = ${p.width * p.height} colours`);
