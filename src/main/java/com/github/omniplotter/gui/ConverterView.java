@@ -4,6 +4,7 @@ import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.AppPaths;
 import com.github.omniplotter.app.Desktops;
 import com.github.omniplotter.app.Settings;
+import com.github.omniplotter.app.UpdateCheck;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
@@ -120,6 +121,7 @@ public class ConverterView extends BorderPane {
 
         restoreSelection();
         updateOutputLabel();
+        checkForUpdate();
     }
 
     // --- queue ------------------------------------------------------------------------------
@@ -726,6 +728,48 @@ public class ConverterView extends BorderPane {
         if (format != null && formatBox.getItems().contains(format)) {
             formatBox.getSelectionModel().select(format);
         }
+    }
+
+    // --- updates ----------------------------------------------------------------------------
+
+    /**
+     * Asks whether a newer release exists, off the interface thread and without blocking startup.
+     *
+     * <p>Silent unless there is something to say: no spinner, no "you are up to date", nothing at
+     * all when the machine is offline.
+     */
+    private void checkForUpdate() {
+        UpdateCheck.inBackground(result -> Platform.runLater(() -> setTop(updateBanner(result))));
+    }
+
+    private Node updateBanner(UpdateCheck.Result result) {
+        Label text = new Label("OmniPlotter " + result.latest() + " is available.");
+
+        Button notes = new Button("Release notes");
+        notes.getStyleClass().addAll(Styles.SMALL, Styles.ACCENT);
+        notes.setOnAction(e -> Desktops.openUrl(result.url()));
+
+        // Skipping is remembered, so the same version does not come back tomorrow. Dismissing is
+        // not: closing a banner is not the same as saying no.
+        Button skip = new Button("Skip this version");
+        skip.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
+        skip.setOnAction(e -> {
+            Settings.set(Settings.UPDATE_SKIPPED, result.latest().toString());
+            Settings.save();
+            setTop(null);
+        });
+
+        Button dismiss = iconButton(Feather.X, "Dismiss", () -> setTop(null));
+        dismiss.getStyleClass().add(Styles.FLAT);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox banner = new HBox(12, new FontIcon(Feather.DOWNLOAD_CLOUD), text, spacer, notes, skip, dismiss);
+        banner.setAlignment(Pos.CENTER_LEFT);
+        banner.setPadding(new Insets(10, 12, 10, 16));
+        banner.getStyleClass().add("update-banner");
+        return banner;
     }
 
     /** Writes the current selection back. Called once, when the window is closing. */

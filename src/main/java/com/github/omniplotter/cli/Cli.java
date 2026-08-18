@@ -20,6 +20,7 @@ import picocli.CommandLine.Command;
         FormatsCommand.class,
         TargetsCommand.class,
         InspectCommand.class,
+        UpdateCommand.class,
     },
     synopsisSubcommandLabel = "COMMAND")
 public class Cli implements Runnable {

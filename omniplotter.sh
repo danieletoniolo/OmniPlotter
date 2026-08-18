@@ -99,13 +99,14 @@ case "${COMMAND}" in
         # fat jar on the classpath), so the modules it needs are listed by hand:
         #   java.desktop   AWT/Swing imaging, which the engine and JavaFX both use
         #   java.logging   used by JavaFX internally
+        #   java.net.http  the update check
         #   java.xml       FXML-adjacent plumbing pulled in by the toolkit
         #   java.prefs     JavaFX preference lookups on some platforms
         #   jdk.unsupported  sun.misc.Unsafe, still referenced by JavaFX
         RUNTIME="${SCRIPT_DIR}/target/runtime"
         rm -rf "${RUNTIME}"
         jlink \
-            --add-modules java.base,java.desktop,java.logging,java.xml,java.prefs,jdk.unsupported \
+            --add-modules java.base,java.desktop,java.logging,java.net.http,java.xml,java.prefs,jdk.unsupported \
             --strip-debug --no-header-files --no-man-pages --compress=zip-6 \
             --output "${RUNTIME}"
 

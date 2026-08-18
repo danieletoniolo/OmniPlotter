@@ -75,3 +75,11 @@
     -fx-border-width: 1px;
     -fx-border-radius: 4px;
 }
+
+/* The update notice, above everything else. Accent-tinted rather than a warning colour: a new
+   version is news, not a problem. */
+.update-banner {
+    -fx-background-color: -color-accent-subtle;
+    -fx-border-color: transparent transparent -color-accent-muted transparent;
+    -fx-border-width: 0 0 1px 0;
+}
