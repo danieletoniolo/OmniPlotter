@@ -34,9 +34,18 @@ public class Cli implements Runnable {
     }
 
     public static void main(String[] args) {
-        System.exit(new CommandLine(new Cli())
-            .setCaseInsensitiveEnumValuesAllowed(true)
-            .execute(args));
+        System.exit(parser().execute(args));
+    }
+
+    /**
+     * The parser, configured.
+     *
+     * <p>Separate from {@link #main} so a test can drive the command line without the
+     * {@code System.exit} — and, more to the point, so it drives exactly the parser the installed
+     * binary does rather than a second one that can quietly drift from it.
+     */
+    public static CommandLine parser() {
+        return new CommandLine(new Cli()).setCaseInsensitiveEnumValuesAllowed(true);
     }
 
     /**
