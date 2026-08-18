@@ -113,6 +113,9 @@ what `--version` prints, and the installer metadata.
 The builds are unsigned. macOS needs right-click → Open on first launch, and Windows SmartScreen
 needs "More info" → "Run anyway".
 
+What is planned after the first release, and what has been deliberately ruled out, is in
+[ROADMAP.md](ROADMAP.md).
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
