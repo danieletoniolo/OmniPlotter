@@ -1,0 +1,13 @@
+# The reference vectors are byte-exact fixtures: whatever git stores must come back out unchanged.
+# Most are binary anyway, but the Python script vectors contain no NUL bytes, so git's heuristic
+# calls them text and rewrites their line endings on Windows checkout — which broke 285 of them
+# under CI. Marking the whole fixture tree binary settles it.
+src/test/resources/ref/** binary
+
+# Icon bundles.
+*.icns binary
+*.ico  binary
+*.png  binary
+
+# Shell scripts must keep LF even when checked out on Windows, since CI runs them under bash.
+*.sh text eol=lf
