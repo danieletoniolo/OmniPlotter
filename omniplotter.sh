@@ -89,10 +89,15 @@ case "${COMMAND}" in
         rm -rf "${OUT}"
         mkdir -p "${OUT}"
 
+        # Windows gets a second, console launcher; see packaging/omniplotter.properties. The other
+        # two do not: their main launcher already prints to a terminal, and on a case-insensitive
+        # macOS filesystem `omniplotter` and `OmniPlotter` are the same file, so jpackage refuses.
+        EXTRA=()
         case "$(uname -s)" in
             Darwin) TYPE=dmg; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.icns" ;;
             Linux)  TYPE=deb; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.png" ;;
-            *)      TYPE=msi; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.ico" ;;
+            *)      TYPE=msi; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.ico"
+                    EXTRA=(--add-launcher "omniplotter=${SCRIPT_DIR}/packaging/omniplotter.properties") ;;
         esac
 
         # A trimmed runtime instead of the whole JDK. The app is non-modular (JavaFX lives in the
@@ -100,13 +105,16 @@ case "${COMMAND}" in
         #   java.desktop   AWT/Swing imaging, which the engine and JavaFX both use
         #   java.logging   used by JavaFX internally
         #   java.net.http  the update check
+        #   jdk.crypto.ec  the elliptic-curve cipher suites GitHub's TLS negotiates. Without it
+        #                  the update check fails with a handshake_failure, and only in the
+        #                  packaged application: a full JDK has the provider all along.
         #   java.xml       FXML-adjacent plumbing pulled in by the toolkit
         #   java.prefs     JavaFX preference lookups on some platforms
         #   jdk.unsupported  sun.misc.Unsafe, still referenced by JavaFX
         RUNTIME="${SCRIPT_DIR}/target/runtime"
         rm -rf "${RUNTIME}"
         jlink \
-            --add-modules java.base,java.desktop,java.logging,java.net.http,java.xml,java.prefs,jdk.unsupported \
+            --add-modules java.base,java.desktop,java.logging,java.net.http,java.xml,java.prefs,jdk.crypto.ec,jdk.unsupported \
             --strip-debug --no-header-files --no-man-pages --compress=zip-6 \
             --output "${RUNTIME}"
 
@@ -131,6 +139,7 @@ case "${COMMAND}" in
             --runtime-image "${RUNTIME}" \
             --dest "${OUT}" \
             --type "${TYPE}" \
+            ${EXTRA[@]+"${EXTRA[@]}"} \
             "$@"
         echo "Installer written to ${OUT}"
         ls -lh "${OUT}"

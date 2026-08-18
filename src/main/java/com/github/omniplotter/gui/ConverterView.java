@@ -2,6 +2,7 @@ package com.github.omniplotter.gui;
 
 import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.AppPaths;
+import com.github.omniplotter.app.CommandSetup;
 import com.github.omniplotter.app.Desktops;
 import com.github.omniplotter.app.Settings;
 import com.github.omniplotter.app.UpdateCheck;
@@ -20,6 +21,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -51,6 +53,7 @@ import org.kordamp.ikonli.javafx.FontIcon;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -318,6 +321,11 @@ public class ConverterView extends BorderPane {
             () -> Desktops.openFolder(AppPaths.logs()));
         logs.getStyleClass().add(Styles.FLAT);
 
+        // Whoever installed a .dmg and never opens a terminal is exactly the person who would not
+        // find out from anywhere else that this application is also a command line.
+        Button terminal = iconButton(Feather.TERMINAL, "Set up the terminal command", this::setUpCommand);
+        terminal.getStyleClass().add(Styles.FLAT);
+
         progress.setVisible(false);
         progress.setPrefWidth(160);
 
@@ -329,7 +337,8 @@ public class ConverterView extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress, logs, theme, convertButton);
+        HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
+            terminal, logs, theme, convertButton);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(12, 16, 12, 16));
         bar.getStyleClass().add("action-bar");
@@ -728,6 +737,43 @@ public class ConverterView extends BorderPane {
         if (format != null && formatBox.getItems().contains(format)) {
             formatBox.getSelectionModel().select(format);
         }
+    }
+
+    /** The window's half of {@code omniplotter setup}: same work, reported in a dialog. */
+    private void setUpCommand() {
+        var launcher = CommandSetup.launcher();
+        if (launcher.isEmpty()) {
+            report(Alert.AlertType.INFORMATION, "Nothing to link to",
+                "This copy is running as a plain jar rather than an installed application, so there "
+                    + "is no launcher to put on your PATH.");
+            return;
+        }
+        try {
+            CommandSetup.Outcome outcome = CommandSetup.install(CommandSetup.consoleLauncher(launcher.get()));
+            if (outcome.onPath()) {
+                report(Alert.AlertType.INFORMATION, "Ready",
+                    "Open a terminal and run:\n\n    omniplotter --help");
+            } else {
+                // The same refusal the command line makes: the shell's configuration is the user's,
+                // and a window is the worst place to edit it without being asked.
+                report(Alert.AlertType.INFORMATION, "One step left",
+                    outcome.link() + " was created, but " + outcome.link().getParent()
+                        + " is not on your PATH.\n\nAdd this line to " + outcome.shellFile()
+                        + ":\n\n    " + outcome.shellLine());
+            }
+        } catch (IOException e) {
+            report(Alert.AlertType.ERROR, "Could not set up the command", String.valueOf(e.getMessage()));
+        }
+    }
+
+    private void report(Alert.AlertType type, String header, String detail) {
+        Alert alert = new Alert(type);
+        alert.initOwner(stage);
+        alert.setTitle("Terminal command");
+        alert.setHeaderText(header);
+        alert.setContentText(detail);
+        alert.getDialogPane().setMinWidth(520);
+        alert.showAndWait();
     }
 
     // --- updates ----------------------------------------------------------------------------

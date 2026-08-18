@@ -21,6 +21,8 @@ import picocli.CommandLine.Command;
         TargetsCommand.class,
         InspectCommand.class,
         UpdateCommand.class,
+        SetupCommand.class,
+        DoctorCommand.class,
     },
     synopsisSubcommandLabel = "COMMAND")
 public class Cli implements Runnable {
