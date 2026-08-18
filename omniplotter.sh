@@ -98,10 +98,12 @@ case "${COMMAND}" in
         #           instead of installing beside it. It has to stay identical for the life of the
         #           product and cannot be corrected after the first release, since it is what
         #           already-installed copies were recorded under. Plus a Start menu entry and a
-        #           second, console launcher;
-        #           see packaging/omniplotter.properties. macOS and Linux do not get one: their
-        #           launcher already prints to a terminal, and on a case-insensitive filesystem
-        #           `omniplotter` collides with `OmniPlotter` inside the bundle.
+        #           second, console launcher; see packaging/omniplotter-cli.properties.
+        #           macOS and Linux do not get one: their
+        #           launcher already prints to a terminal. Note the `-cli` in its name: both NTFS
+        #           and the macOS filesystem are case-insensitive, so a launcher called
+        #           `omniplotter` is the same file as `OmniPlotter` and jpackage refuses to write
+        #           the second one.
         #
         #   Linux   a desktop entry, so the .deb leaves something in the application menu rather
         #           than only a directory under /opt.
@@ -114,7 +116,7 @@ case "${COMMAND}" in
             *)      TYPE=msi; ICON="${SCRIPT_DIR}/src/main/resources/icon/icon.ico"
                     EXTRA=(--win-upgrade-uuid 3B4080D2-5F04-48BC-A0D9-E263FC4948C6
                            --win-menu
-                           --add-launcher "omniplotter=${SCRIPT_DIR}/packaging/omniplotter.properties") ;;
+                           --add-launcher "omniplotter-cli=${SCRIPT_DIR}/packaging/omniplotter-cli.properties") ;;
         esac
 
         # A trimmed runtime instead of the whole JDK. The app is non-modular (JavaFX lives in the
@@ -141,12 +143,30 @@ case "${COMMAND}" in
         mkdir -p "${STAGE}"
         cp "${JAR}" "${STAGE}/"
 
+        # jpackage takes less than a tag can say. It wants one to three integers, so a pre-release
+        # suffix has to come off before it sees the version — the full string stays in the jar
+        # manifest, which is what --version and the update check read. macOS additionally rejects a
+        # leading zero, so a 0.x version cannot be packaged at all; saying so here beats letting the
+        # bundler skip itself with a message about invalid components.
         VERSION="${OMNIPLOTTER_VERSION:-$(project_version)}"
-        echo "Packaging version ${VERSION}"
+        APP_VERSION="${VERSION%%-*}"
+        case "${APP_VERSION}" in
+            0|0.*)
+                echo "Cannot package ${VERSION}: macOS requires the first number of an app" >&2
+                echo "version to be 1 or greater. Use a 1.0.0 or later tag." >&2
+                exit 1
+                ;;
+        esac
+
+        if [ "${APP_VERSION}" != "${VERSION}" ]; then
+            echo "Packaging version ${VERSION} (installers are stamped ${APP_VERSION})"
+        else
+            echo "Packaging version ${VERSION}"
+        fi
 
         jpackage \
             --name OmniPlotter \
-            --app-version "${VERSION}" \
+            --app-version "${APP_VERSION}" \
             --description "Convert images to calculator picture and script formats" \
             --vendor omniplotter \
             --input "${STAGE}" \

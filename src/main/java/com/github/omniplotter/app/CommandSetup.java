@@ -25,6 +25,12 @@ public final class CommandSetup {
 
     public static final String COMMAND = "omniplotter";
 
+    /**
+     * The Windows console launcher, which cannot be called {@code omniplotter}: NTFS is
+     * case-insensitive, so that name is already taken by {@code OmniPlotter.exe}.
+     */
+    public static final String CONSOLE_COMMAND = "omniplotter-cli";
+
     /** What a run of {@link #install} did, so the caller can report it and say what remains. */
     public record Outcome(Path link, boolean created, boolean onPath, String shellLine, Path shellFile) {}
 
@@ -56,7 +62,7 @@ public final class CommandSetup {
         if (!AppPaths.isWindows()) {
             return running;
         }
-        Path sibling = running.resolveSibling(COMMAND + ".exe");
+        Path sibling = running.resolveSibling(CONSOLE_COMMAND + ".exe");
         return Files.isExecutable(sibling) ? sibling : running;
     }
 
