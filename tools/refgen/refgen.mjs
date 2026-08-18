@@ -20,7 +20,6 @@
 // PreprocessingParityTest, which does need real ImageMagick.
 
 import fs from 'node:fs';
-import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPng } from './png.mjs';
@@ -174,12 +173,13 @@ const writtenImages = new Set();
 let bytes = 0;
 
 for (const { format, pattern, w, h } of cases) {
-  // Raw RGBA rather than PNG: no decoder in the loop means no question about how alpha, colour
-  // profiles or premultiplication were round-tripped. gzip only to keep the fixtures small.
-  const imageName = `${pattern}_${w}x${h}.rgba.gz`;
+  // Raw RGBA, uncompressed: no decoder in the loop means no question about how alpha, colour
+  // profiles or premultiplication were round-tripped, and no compressor means the bytes do not
+  // depend on which zlib happens to be installed. Git packs them well enough on its own.
+  const imageName = `${pattern}_${w}x${h}.rgba`;
   const px = PATTERNS[pattern](w, h);
   if (!writtenImages.has(imageName)) {
-    fs.writeFileSync(path.join(OUT, 'images', imageName), zlib.gzipSync(Buffer.from(px), { level: 9 }));
+    fs.writeFileSync(path.join(OUT, 'images', imageName), Buffer.from(px));
     writtenImages.add(imageName);
   }
 

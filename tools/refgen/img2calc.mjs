@@ -11,8 +11,6 @@
 // mismatch against the Java port is always a Java bug and never a transcription artefact. Only
 // three things are substituted, all of them browser-isms with no bearing on the output bytes:
 //
-//   deflate_f(x, {})  ->  zlib.deflateSync    (identical: pako defaults are windowBits 15,
-//                                              non-raw, level 6 — the same zlib stream)
 //   prompt(...)       ->  the `oncalcName` / `oncalcNum` module globals
 //   getWidth()        ->  the `reqWidth` module global
 //
@@ -21,7 +19,7 @@
 //
 // Source line numbers refer to reference/img2calc/index.html.
 
-import zlib from 'node:zlib';
+import { deflate } from './pako.mjs';
 
 // --- globals the reference functions close over ------------------------------------------------
 
@@ -45,8 +43,10 @@ export function configure(opts) {
   oncalcNum = opts.oncalcNum ?? 1;
 }
 
+// The reference's own pako, loaded from the submodule. Node's zlib is not a safe stand-in: it is
+// the same algorithm but not the same bytes across versions.
 function deflate_f(input) {
-  return zlib.deflateSync(Buffer.from(input));
+  return deflate(input);
 }
 
 // --- helpers (index.html:658-700, 1723-1790) ---------------------------------------------------

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.TestFactory;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
-import java.util.zip.GZIPInputStream;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -69,16 +67,14 @@ public class ReferenceVectorTest {
     }
 
     /**
-     * Loads a gzipped raw RGBA buffer as a non-premultiplied ARGB image.
+     * Loads a raw RGBA buffer as a non-premultiplied ARGB image.
      *
-     * <p>Raw RGBA rather than PNG so there is no decoder between the fixture and the encoder: the
-     * pixels the reference saw are the pixels the Java encoder gets, alpha included.
+     * <p>Raw and uncompressed so there is nothing between the fixture and the encoder: the pixels
+     * the reference saw are the pixels the Java encoder gets, alpha included, and the bytes on disk
+     * do not depend on which compressor wrote them.
      */
     private static BufferedImage loadImage(Path path, int width, int height) throws IOException {
-        byte[] rgba;
-        try (InputStream in = new GZIPInputStream(Files.newInputStream(path))) {
-            rgba = in.readAllBytes();
-        }
+        byte[] rgba = Files.readAllBytes(path);
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         for (int i = 0; i < width * height; i++) {
             int r = rgba[i * 4] & 0xFF;

@@ -117,34 +117,3 @@ export function readPng(path) {
 
   return { width, height, rgba };
 }
-
-/** Write an RGBA buffer as an uncompressed-filter PNG. Used for the preprocessing parity fixtures. */
-export function writePng(path, width, height, rgba) {
-  const stride = width * 4;
-  const raw = Buffer.alloc(height * (stride + 1));
-  for (let y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0; // filter: None
-    Buffer.from(rgba.buffer, rgba.byteOffset + y * stride, stride).copy(raw, y * (stride + 1) + 1);
-  }
-
-  const chunk = (type, data) => {
-    const out = Buffer.alloc(12 + data.length);
-    out.writeUInt32BE(data.length, 0);
-    out.write(type, 4, 'ascii');
-    data.copy(out, 8);
-    out.writeInt32BE(zlib.crc32(out.subarray(4, 8 + data.length)) | 0, 8 + data.length);
-    return out;
-  };
-
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8;  // bit depth
-  ihdr[9] = 6;  // colour type: RGBA
-  fs.writeFileSync(path, Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]));
-}
