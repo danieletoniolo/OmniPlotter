@@ -1,6 +1,9 @@
 package com.github.omniplotter.gui;
 
 import atlantafx.base.theme.Styles;
+import com.github.omniplotter.app.AppPaths;
+import com.github.omniplotter.app.Desktops;
+import com.github.omniplotter.app.Settings;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
@@ -89,7 +92,8 @@ public class ConverterView extends BorderPane {
     private final Label status = new Label("Drop images to begin.");
     private final Button convertButton = new Button("Convert");
 
-    private Path outputDir = Path.of(System.getProperty("user.home"), "Desktop");
+    private Path outputDir =
+        Settings.getDirectory(Settings.OUTPUT_DIR, Path.of(System.getProperty("user.home"), "Desktop"));
     /** Suppresses preview refreshes while the format cascade is being rebuilt. */
     private boolean updating;
     private Task<?> previewTask;
@@ -114,10 +118,7 @@ public class ConverterView extends BorderPane {
         wireCascade();
         wireDragAndDrop();
 
-        modeBox.getSelectionModel().select(Mode.VAR);
-        onModeChanged();
-        // Open on a Casio picture file rather than whichever target happens to sort first.
-        targetBox.getSelectionModel().select(Target.CASIO_CG);
+        restoreSelection();
         updateOutputLabel();
     }
 
@@ -309,6 +310,12 @@ public class ConverterView extends BorderPane {
         Button theme = iconButton(Feather.MOON, "Light / dark", OmniPlotterApp.Theme::toggle);
         theme.getStyleClass().add(Styles.FLAT);
 
+        // The window logs where its user cannot see it, so the way to that file has to be in the
+        // window itself — otherwise a bug report can only say that something did not work.
+        Button logs = iconButton(Feather.FILE_TEXT, "Open log folder",
+            () -> Desktops.openFolder(AppPaths.logs()));
+        logs.getStyleClass().add(Styles.FLAT);
+
         progress.setVisible(false);
         progress.setPrefWidth(160);
 
@@ -320,7 +327,7 @@ public class ConverterView extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress, theme, convertButton);
+        HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress, logs, theme, convertButton);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(12, 16, 12, 16));
         bar.getStyleClass().add("action-bar");
@@ -691,7 +698,59 @@ public class ConverterView extends BorderPane {
         File chosen = chooser.showDialog(stage);
         if (chosen != null) {
             outputDir = chosen.toPath();
+            // Saved on the spot rather than at exit. It is the setting users notice losing, and
+            // choosing it is deliberate enough to be worth a write.
+            Settings.set(Settings.OUTPUT_DIR, outputDir.toString());
+            Settings.save();
             updateOutputLabel();
+        }
+    }
+
+    /**
+     * Reopens on whatever was selected last, defaulting to a Casio picture file rather than
+     * whichever target happens to sort first.
+     *
+     * <p>Each step is attempted separately: a settings file naming a format that no longer exists,
+     * or one that the restored target does not support, should cost that one step and not the rest.
+     */
+    private void restoreSelection() {
+        modeBox.getSelectionModel().select(
+            lookup(Settings.get(Settings.LAST_MODE, null), Mode::fromString, Mode.VAR));
+        onModeChanged();
+
+        Target target = lookup(Settings.get(Settings.LAST_TARGET, null), Target::fromString, Target.CASIO_CG);
+        targetBox.getSelectionModel().select(
+            targetBox.getItems().contains(target) ? target : targetBox.getItems().get(0));
+
+        Format format = lookup(Settings.get(Settings.LAST_FORMAT, null), Format::fromString, null);
+        if (format != null && formatBox.getItems().contains(format)) {
+            formatBox.getSelectionModel().select(format);
+        }
+    }
+
+    /** Writes the current selection back. Called once, when the window is closing. */
+    public void rememberState() {
+        Settings.set(Settings.OUTPUT_DIR, outputDir.toString());
+        if (modeBox.getValue() != null) {
+            Settings.set(Settings.LAST_MODE, modeBox.getValue().toString());
+        }
+        if (targetBox.getValue() != null) {
+            Settings.set(Settings.LAST_TARGET, targetBox.getValue().getId());
+        }
+        if (formatBox.getValue() != null) {
+            Settings.set(Settings.LAST_FORMAT, formatBox.getValue().id());
+        }
+    }
+
+    /** The three identifier lookups throw on anything they do not know; a stale setting is not fatal. */
+    private static <T> T lookup(String id, java.util.function.Function<String, T> parse, T fallback) {
+        if (id == null) {
+            return fallback;
+        }
+        try {
+            return parse.apply(id);
+        } catch (IllegalArgumentException e) {
+            return fallback;
         }
     }
 

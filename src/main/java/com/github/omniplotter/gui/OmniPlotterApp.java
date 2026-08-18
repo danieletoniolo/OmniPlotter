@@ -2,6 +2,8 @@ package com.github.omniplotter.gui;
 
 import atlantafx.base.theme.PrimerDark;
 import atlantafx.base.theme.PrimerLight;
+import com.github.omniplotter.app.Log;
+import com.github.omniplotter.app.Settings;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -22,7 +24,8 @@ public class OmniPlotterApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        Theme.apply(Theme.detectSystemPreference());
+        Log.toFile();
+        Theme.apply(Theme.preference());
 
         ConverterView view = new ConverterView(stage);
         Scene scene = new Scene(view, 1180, 760);
@@ -39,6 +42,25 @@ public class OmniPlotterApp extends Application {
         }
         stage.setMinWidth(900);
         stage.setMinHeight(620);
+
+        // Restored onto the stage rather than the scene: the stage includes the window decoration,
+        // so round-tripping through the scene would grow the window by the title bar every launch.
+        int width = Settings.getInt(Settings.WINDOW_WIDTH, 0);
+        int height = Settings.getInt(Settings.WINDOW_HEIGHT, 0);
+        if (width >= stage.getMinWidth() && height >= stage.getMinHeight()) {
+            stage.setWidth(width);
+            stage.setHeight(height);
+        }
+
+        // One place where everything worth keeping is written, so the rest of the application can
+        // set values without each of them deciding when to touch the disk.
+        stage.setOnHiding(e -> {
+            Settings.setInt(Settings.WINDOW_WIDTH, (int) stage.getWidth());
+            Settings.setInt(Settings.WINDOW_HEIGHT, (int) stage.getHeight());
+            view.rememberState();
+            Settings.save();
+        });
+
         stage.show();
     }
 
@@ -61,6 +83,14 @@ public class OmniPlotterApp extends Application {
 
         public static void toggle() {
             apply(!dark);
+            Settings.set(Settings.THEME, dark ? "dark" : "light");
+            Settings.save();
+        }
+
+        /** What was chosen last time, or the desktop's setting on a first launch. */
+        public static boolean preference() {
+            String stored = Settings.get(Settings.THEME, null);
+            return stored == null ? detectSystemPreference() : "dark".equalsIgnoreCase(stored);
         }
 
         /**
