@@ -133,49 +133,61 @@
 /*
  * Every control with an opaque default fill has to be cleared, or it shows up as a solid rectangle
  * cut into the translucent panel. This is the unglamorous half of the job.
+ *
+ * Named per instance rather than by control type, and that is not fussiness. A popup lives in its
+ * own window but its styleable parent chain still runs back through the control that owns it, so
+ * `.converter-view .list-view` also matches the list inside a ComboBox dropdown — which is how a
+ * rule meant for the queue left every dropdown in the window transparent and unreadable. The two
+ * surfaces that genuinely have glass behind them say so by name; everything else keeps the theme's
+ * own opaque background.
  */
-.converter-view .list-view,
-.converter-view .list-view > .virtual-flow > .clipped-container > .sheet {
+.queue-list,
+.queue-list > .virtual-flow > .clipped-container > .sheet {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
     -fx-padding: 0;
 }
 
-.converter-view .list-cell {
+.queue-list > .virtual-flow > .clipped-container > .sheet > .list-cell {
     -fx-background-color: transparent;
     -fx-background-radius: 8px;
     -fx-padding: 6px 8px;
 }
 
-.converter-view .list-cell:filled:hover {
+.queue-list > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover {
     -fx-background-color: -op-row-hover;
 }
 
-.converter-view .list-cell:filled:selected {
+.queue-list > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:selected {
     -fx-background-color: -op-row-selected;
 }
 
 /* ScrollPane needs both properties cleared; `-fx-background` alone leaves the viewport opaque and
    `-fx-background-color` alone leaves the frame. */
-.converter-view .scroll-pane,
-.converter-view .scroll-pane > .viewport {
+.settings-scroll,
+.settings-scroll > .viewport {
     -fx-background: transparent;
     -fx-background-color: transparent;
 }
 
-.converter-view .scroll-bar:vertical,
-.converter-view .scroll-bar:horizontal {
+.queue-list > .scroll-bar:vertical,
+.queue-list > .scroll-bar:horizontal,
+.settings-scroll > .scroll-bar:vertical,
+.settings-scroll > .scroll-bar:horizontal {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
 
-.converter-view .scroll-bar > .thumb {
+.queue-list > .scroll-bar > .thumb,
+.settings-scroll > .scroll-bar > .thumb {
     -fx-background-color: -op-thumb;
     -fx-background-radius: 6px;
 }
 
-.converter-view .scroll-bar > .increment-button,
-.converter-view .scroll-bar > .decrement-button {
+.queue-list > .scroll-bar > .increment-button,
+.queue-list > .scroll-bar > .decrement-button,
+.settings-scroll > .scroll-bar > .increment-button,
+.settings-scroll > .scroll-bar > .decrement-button {
     -fx-padding: 0;
     -fx-opacity: 0;
 }

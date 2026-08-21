@@ -180,6 +180,9 @@ public class ConverterView extends StackPane {
         Node title = sectionTitle("Images", Feather.LAYERS, Feather.CHEVRON_LEFT,
             () -> queueSide.setCollapsed(true, true));
 
+        // Named so the stylesheet can clear this list without also clearing the one inside every
+        // ComboBox dropdown, which shares its style class and inherits from the same parent chain.
+        queue.getStyleClass().add("queue-list");
         queue.setPlaceholder(dropHint());
         queue.setCellFactory(list -> new ListCell<>() {
             @Override
@@ -404,6 +407,7 @@ public class ConverterView extends StackPane {
         panel.setPadding(new Insets(16));
 
         ScrollPane scroll = new ScrollPane(panel);
+        scroll.getStyleClass().add("settings-scroll");
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
