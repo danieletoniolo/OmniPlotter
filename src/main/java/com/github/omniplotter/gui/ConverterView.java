@@ -1,5 +1,6 @@
 package com.github.omniplotter.gui;
 
+import atlantafx.base.controls.RingProgressIndicator;
 import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.AppPaths;
 import com.github.omniplotter.app.CommandSetup;
@@ -30,7 +31,6 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Spinner;
@@ -112,7 +112,7 @@ public class ConverterView extends StackPane {
     private final Label sizeWarning = new Label();
 
     private final Label outputLabel = new Label();
-    private final ProgressBar progress = new ProgressBar(0);
+    private final RingProgressIndicator progress = new RingProgressIndicator(0);
     private final Label status = new Label("Drop images to begin.");
     private final Button convertButton = new Button("Convert");
 
@@ -170,8 +170,7 @@ public class ConverterView extends StackPane {
     // --- queue ------------------------------------------------------------------------------
 
     private Node buildQueuePanel() {
-        Label title = new Label("Images");
-        title.getStyleClass().add(Styles.TITLE_4);
+        Node title = sectionTitle("Images", Feather.LAYERS);
 
         queue.setPlaceholder(dropHint());
         queue.setCellFactory(list -> new ListCell<>() {
@@ -241,6 +240,9 @@ public class ConverterView extends StackPane {
 
         sourcePane = previewCard("Source", sourceView, sourceCaption);
         previewPane = previewCard("Preview", previewView, previewCaption, sizeWarning);
+        // The two cards were identical, which left nothing saying which of the images is the one
+        // being produced. An accent edge is enough; the caption underneath already names the format.
+        previewPane.getStyleClass().add("result");
         HBox.setHgrow(sourcePane, Priority.ALWAYS);
         HBox.setHgrow(previewPane, Priority.ALWAYS);
 
@@ -307,8 +309,7 @@ public class ConverterView extends StackPane {
     // --- settings ---------------------------------------------------------------------------
 
     private Node buildSettingsPanel() {
-        Label title = new Label("Output");
-        title.getStyleClass().add(Styles.TITLE_4);
+        Node title = sectionTitle("Output", Feather.SLIDERS);
 
         modeBox.setItems(FXCollections.observableArrayList(Mode.values()));
         modeBox.setConverter(labeller(m -> m == Mode.VAR ? "Picture file" : "Python script"));
@@ -364,6 +365,17 @@ public class ConverterView extends StackPane {
         return scroll;
     }
 
+    /** A panel heading. The icon is what gives the two side panels a shared rhythm. */
+    private Node sectionTitle(String text, Feather icon) {
+        Label label = new Label(text);
+        label.getStyleClass().add(Styles.TITLE_4);
+
+        HBox box = new HBox(8, new FontIcon(icon), label);
+        box.setAlignment(Pos.CENTER_LEFT);
+        box.getStyleClass().add("section-title");
+        return box;
+    }
+
     private Node field(String label, Node control) {
         Label caption = new Label(label);
         caption.getStyleClass().add(Styles.TEXT_CAPTION);
@@ -409,8 +421,13 @@ public class ConverterView extends StackPane {
         Button terminal = iconButton(Feather.TERMINAL, "Set up the terminal command", this::setUpCommand);
         terminal.getStyleClass().add(Styles.FLAT);
 
+        // A ring rather than a 160px bar: in a dock this narrow the bar was most of the width,
+        // and the ring says the same thing in the space of a button while also reading the figure
+        // out. Kept in the layout when hidden, so pressing Convert does not shuffle the row.
         progress.setVisible(false);
-        progress.setPrefWidth(160);
+        progress.setMinSize(38, 38);
+        progress.setPrefSize(38, 38);
+        progress.setMaxSize(38, 38);
 
         convertButton.setDefaultButton(true);
         convertButton.getStyleClass().addAll(Styles.ACCENT, "hero");
