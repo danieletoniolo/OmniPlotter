@@ -64,10 +64,21 @@ import java.util.List;
  * <p>The preview is the actual preprocessed image — the same pixels the encoder will consume — so
  * quantisation, palette remapping and dithering are visible before anything is written. Showing a
  * plain scaled-down source instead would hide exactly the part users need to judge.
+ *
+ * <p>The four regions float as separate translucent surfaces over a {@link Backdrop} rather than
+ * being docked edge to edge, which is why this is a {@code StackPane} wrapping a {@code BorderPane}
+ * instead of being one: the layout is still the border layout, but it now needs something painted
+ * underneath it and gaps for that something to show through.
  */
-public class ConverterView extends BorderPane {
+public class ConverterView extends StackPane {
+
+    /** Space between the floating surfaces, and between them and the window edge. */
+    private static final double GAP = 14;
 
     private final Stage stage;
+
+    private final Backdrop backdrop = new Backdrop();
+    private final BorderPane content = new BorderPane();
 
     private final ObservableList<ConversionJob> jobs = FXCollections.observableArrayList();
     private final ListView<ConversionJob> queue = new ListView<>(jobs);
@@ -114,10 +125,25 @@ public class ConverterView extends BorderPane {
         this.stage = stage;
         getStyleClass().add("converter-view");
 
-        setLeft(buildQueuePanel());
-        setCenter(buildPreviewPanel());
-        setRight(buildSettingsPanel());
-        setBottom(buildActionBar());
+        Node queuePanel = buildQueuePanel();
+        Node previews = buildPreviewPanel();
+        Node settings = buildSettingsPanel();
+        Node dock = buildActionBar();
+
+        content.setLeft(queuePanel);
+        content.setCenter(previews);
+        content.setRight(settings);
+        content.setBottom(dock);
+
+        // The gaps are the only thing separating the surfaces now that the 1px rules are gone, so
+        // they have to be even. Each region carries the space on the sides it owns, and it is the
+        // bottom margins of the row above that hold the dock clear of it.
+        BorderPane.setMargin(queuePanel, new Insets(GAP, 0, GAP, GAP));
+        BorderPane.setMargin(previews, new Insets(GAP, 0, GAP, GAP));
+        BorderPane.setMargin(settings, new Insets(GAP, GAP, GAP, GAP));
+        BorderPane.setMargin(dock, new Insets(0, GAP, GAP, GAP));
+
+        getChildren().addAll(backdrop, content);
 
         wireCascade();
         wireDragAndDrop();
@@ -168,7 +194,7 @@ public class ConverterView extends BorderPane {
         panel.setPadding(new Insets(16));
         panel.setPrefWidth(260);
         panel.setMinWidth(200);
-        panel.getStyleClass().add("panel");
+        panel.getStyleClass().add("glass");
         return panel;
     }
 
@@ -203,8 +229,7 @@ public class ConverterView extends BorderPane {
         HBox.setHgrow(source, Priority.ALWAYS);
         HBox.setHgrow(preview, Priority.ALWAYS);
 
-        HBox row = new HBox(16, source, preview);
-        row.setPadding(new Insets(16));
+        HBox row = new HBox(GAP, source, preview);
         return row;
     }
 
@@ -229,7 +254,8 @@ public class ConverterView extends BorderPane {
 
         VBox card = new VBox(8, heading, frame);
         card.getChildren().addAll(captions);
-        card.getStyleClass().add("card");
+        card.getStyleClass().addAll("glass", "liftable");
+        card.setPadding(new Insets(16));
         card.setMinWidth(0);
         card.setPrefWidth(0);
         return card;
@@ -285,11 +311,13 @@ public class ConverterView extends BorderPane {
         panel.setPadding(new Insets(16));
         panel.setPrefWidth(300);
         panel.setMinWidth(260);
-        panel.getStyleClass().add("panel");
 
         ScrollPane scroll = new ScrollPane(panel);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        // On the content the surface would scroll away with it, and the viewport would cut off its
+        // shadow. It has to be the frame that is made of glass.
+        scroll.getStyleClass().add("glass");
         return scroll;
     }
 
@@ -330,7 +358,7 @@ public class ConverterView extends BorderPane {
         progress.setPrefWidth(160);
 
         convertButton.setDefaultButton(true);
-        convertButton.getStyleClass().add(Styles.ACCENT);
+        convertButton.getStyleClass().addAll(Styles.ACCENT, "hero");
         convertButton.setGraphic(new FontIcon(Feather.DOWNLOAD));
         convertButton.setOnAction(e -> convertAll());
 
@@ -340,8 +368,8 @@ public class ConverterView extends BorderPane {
         HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
             terminal, logs, theme, convertButton);
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setPadding(new Insets(12, 16, 12, 16));
-        bar.getStyleClass().add("action-bar");
+        bar.setPadding(new Insets(10, 14, 10, 16));
+        bar.getStyleClass().add("dock");
         return bar;
     }
 
@@ -415,7 +443,7 @@ public class ConverterView extends BorderPane {
         presetChips.getChildren().clear();
         for (FormatConfig.SizePreset preset : config.presets()) {
             Button chip = new Button(preset.label());
-            chip.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+            chip.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED, "preset-chip");
             chip.setTooltip(new Tooltip(preset.width() + " × " + preset.height()));
             chip.setOnAction(e -> {
                 widthSpinner.getValueFactory().setValue(preset.width());
@@ -785,7 +813,11 @@ public class ConverterView extends BorderPane {
      * all when the machine is offline.
      */
     private void checkForUpdate() {
-        UpdateCheck.inBackground(result -> Platform.runLater(() -> setTop(updateBanner(result))));
+        UpdateCheck.inBackground(result -> Platform.runLater(() -> {
+            Node banner = updateBanner(result);
+            BorderPane.setMargin(banner, new Insets(GAP, GAP, 0, GAP));
+            content.setTop(banner);
+        }));
     }
 
     private Node updateBanner(UpdateCheck.Result result) {
@@ -802,10 +834,10 @@ public class ConverterView extends BorderPane {
         skip.setOnAction(e -> {
             Settings.set(Settings.UPDATE_SKIPPED, result.latest().toString());
             Settings.save();
-            setTop(null);
+            content.setTop(null);
         });
 
-        Button dismiss = iconButton(Feather.X, "Dismiss", () -> setTop(null));
+        Button dismiss = iconButton(Feather.X, "Dismiss", () -> content.setTop(null));
         dismiss.getStyleClass().add(Styles.FLAT);
 
         Region spacer = new Region();

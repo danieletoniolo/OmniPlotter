@@ -1,85 +1,260 @@
 /*
- * Small additions on top of the AtlantaFX Primer theme.
+ * Additions on top of the AtlantaFX Primer theme.
  *
- * Deliberately thin: the theme already supplies colours, typography and control styling for both
- * light and dark, and everything here is written in terms of its `-color-*` variables so both
- * follow automatically. The previous version carried 644 lines of hand-rolled styling that had to
- * be maintained against every control.
+ * The theme supplies colours, typography and control styling for both light and dark; everything
+ * structural here is written in terms of its `-color-*` variables so both follow automatically.
+ *
+ * What the theme cannot supply is translucency. JavaFX CSS has no `alpha()` function and `derive()`
+ * changes brightness rather than opacity, so a glass surface needs its own literal rgba values —
+ * which is what the `-op-*` tokens below are, declared once per theme and referenced everywhere
+ * else. The `theme-dark` class that selects between them is put on the root by
+ * `OmniPlotterApp.Theme`, because the user agent stylesheet swap alone leaves no trace the author
+ * stylesheet can match on.
  */
 
+/* --- tokens ---------------------------------------------------------------------------- */
+
 .converter-view {
-    -fx-background-color: -color-bg-default;
+    /* Not white: glass at 55% white over a white ground is invisible. The surfaces read as
+       surfaces only because the ground behind them is a shade cooler and darker. */
+    -op-backdrop:        #eaeef4;
+
+    -op-glass-fill:      rgba(255, 255, 255, 0.58);
+    -op-glass-sheen:     rgba(255, 255, 255, 0.75);
+    -op-glass-stroke:    rgba(255, 255, 255, 0.72);
+    -op-dock-fill:       rgba(255, 255, 255, 0.72);
+
+    -op-shadow:          rgba(15, 23, 42, 0.13);
+    -op-shadow-strong:   rgba(15, 23, 42, 0.20);
+    -op-accent-glow:     rgba(31, 111, 235, 0.42);
+
+    /* The two aurora blobs. Kept faint enough that they are felt rather than seen: the point is to
+       give the translucent surfaces something to be translucent against. */
+    -op-glow-a:          rgba(88, 166, 255, 0.30);
+    -op-glow-b:          rgba(163, 113, 247, 0.24);
+
+    -op-row-hover:       rgba(15, 23, 42, 0.05);
+    -op-row-selected:    rgba(31, 111, 235, 0.14);
+    -op-thumb:           rgba(15, 23, 42, 0.18);
+    -op-well:            rgba(15, 23, 42, 0.045);
+
+    -fx-background-color: -op-backdrop;
 }
 
-.panel {
-    -fx-background-color: -color-bg-subtle;
+.converter-view.theme-dark {
+    -op-backdrop:        #0c1017;
+
+    -op-glass-fill:      rgba(255, 255, 255, 0.05);
+    -op-glass-sheen:     rgba(255, 255, 255, 0.09);
+    -op-glass-stroke:    rgba(255, 255, 255, 0.11);
+    -op-dock-fill:       rgba(255, 255, 255, 0.08);
+
+    -op-shadow:          rgba(0, 0, 0, 0.45);
+    -op-shadow-strong:   rgba(0, 0, 0, 0.60);
+    -op-accent-glow:     rgba(56, 139, 253, 0.50);
+
+    -op-glow-a:          rgba(56, 139, 253, 0.26);
+    -op-glow-b:          rgba(163, 113, 247, 0.20);
+
+    -op-row-hover:       rgba(255, 255, 255, 0.06);
+    -op-row-selected:    rgba(56, 139, 253, 0.22);
+    -op-thumb:           rgba(255, 255, 255, 0.20);
+    -op-well:            rgba(0, 0, 0, 0.28);
 }
 
-/* Side panels read as separate surfaces; in dark mode the fills alone are too close to tell. */
-.converter-view > .panel {
-    -fx-border-color: transparent -color-border-default transparent transparent;
-    -fx-border-width: 0 1px 0 0;
+/* --- the backdrop ---------------------------------------------------------------------- */
+
+/*
+ * Radial gradients rather than a blurred shape: a gradient is already perfectly soft, while
+ * GaussianBlur caps at radius 63 and costs on every frame it is composited. The blobs are plain
+ * Circles whose colour lives here so it follows the theme like everything else.
+ */
+.aurora {
+    -fx-stroke: null;
 }
 
-.converter-view > .scroll-pane {
-    -fx-background-color: -color-bg-subtle;
-    -fx-border-color: transparent transparent transparent -color-border-default;
-    -fx-border-width: 0 0 0 1px;
+.aurora-a {
+    -fx-fill: radial-gradient(center 50% 50%, radius 50%, -op-glow-a 0%, transparent 72%);
 }
 
-.converter-view > .scroll-pane > .viewport {
-    -fx-background-color: -color-bg-subtle;
+.aurora-b {
+    -fx-fill: radial-gradient(center 50% 50%, radius 50%, -op-glow-b 0%, transparent 72%);
 }
 
-.action-bar {
-    -fx-background-color: -color-bg-subtle;
-    -fx-border-color: -color-border-default transparent transparent transparent;
-    -fx-border-width: 1px 0 0 0;
+/* --- glass surfaces -------------------------------------------------------------------- */
+
+/*
+ * Two background layers: the fill, then a sheen inset by a pixel so it stops short of the border.
+ * The sheen is what makes the edge read as a lit surface rather than a flat translucent rectangle,
+ * and it is the whole difference between "transparent panel" and "glass".
+ */
+.glass {
+    -fx-background-color:
+        -op-glass-fill,
+        linear-gradient(to bottom, -op-glass-sheen 0%, transparent 45%);
+    -fx-background-radius: 16px, 15px;
+    -fx-background-insets: 0, 1px;
+    -fx-border-color: -op-glass-stroke;
+    -fx-border-radius: 16px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, -op-shadow, 22, 0.0, 0, 6);
 }
 
-.card {
+/*
+ * Only the preview cards lift on hover. Doing it on the side panels too would mean the shadow
+ * changing almost continuously, since the pointer is over one of them most of the time.
+ */
+.glass.liftable:hover {
+    -fx-effect: dropshadow(gaussian, -op-shadow-strong, 28, 0.0, 0, 9);
+}
+
+/* The action bar: same material, held a little more solid because it carries the primary action,
+   and a deeper shadow because it sits above everything else. */
+.dock {
+    -fx-background-color:
+        -op-dock-fill,
+        linear-gradient(to bottom, -op-glass-sheen 0%, transparent 55%);
+    -fx-background-radius: 18px, 17px;
+    -fx-background-insets: 0, 1px;
+    -fx-border-color: -op-glass-stroke;
+    -fx-border-radius: 18px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, -op-shadow-strong, 26, 0.0, 0, 10);
+}
+
+/* --- surfaces that would otherwise punch a hole in the glass ---------------------------- */
+
+/*
+ * Every control with an opaque default fill has to be cleared, or it shows up as a solid rectangle
+ * cut into the translucent panel. This is the unglamorous half of the job.
+ */
+.converter-view .list-view,
+.converter-view .list-view > .virtual-flow > .clipped-container > .sheet {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+}
+
+.converter-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8px;
+    -fx-padding: 6px 8px;
+}
+
+.converter-view .list-cell:filled:hover {
+    -fx-background-color: -op-row-hover;
+}
+
+.converter-view .list-cell:filled:selected {
+    -fx-background-color: -op-row-selected;
+}
+
+/* ScrollPane needs both properties cleared; `-fx-background` alone leaves the viewport opaque and
+   `-fx-background-color` alone leaves the frame. */
+.converter-view .scroll-pane,
+.converter-view .scroll-pane > .viewport {
+    -fx-background: transparent;
     -fx-background-color: transparent;
 }
+
+.converter-view .scroll-bar:vertical,
+.converter-view .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.converter-view .scroll-bar > .thumb {
+    -fx-background-color: -op-thumb;
+    -fx-background-radius: 6px;
+}
+
+.converter-view .scroll-bar > .increment-button,
+.converter-view .scroll-bar > .decrement-button {
+    -fx-padding: 0;
+    -fx-opacity: 0;
+}
+
+/* --- controls: one radius vocabulary ---------------------------------------------------- */
+
+.converter-view .button,
+.converter-view .text-field,
+.converter-view .combo-box,
+.converter-view .combo-box > .list-cell,
+.converter-view .spinner,
+.converter-view .spinner .text-field {
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+}
+
+/* The size presets are a row of choices, not commands; a pill says so. */
+.converter-view .preset-chip {
+    -fx-background-radius: 999px;
+    -fx-border-radius: 999px;
+    -fx-padding: 3px 12px;
+}
+
+/*
+ * The one control the window exists for. Accent alone made it weigh the same as "Output folder…"
+ * sitting next to it; the glow is what separates the thing you came to press from the rest.
+ */
+.converter-view .button.hero {
+    -fx-background-radius: 10px;
+    -fx-padding: 7px 18px;
+    -fx-effect: dropshadow(gaussian, -op-accent-glow, 16, 0.0, 0, 4);
+}
+
+.converter-view .button.hero:hover {
+    -fx-effect: dropshadow(gaussian, -op-accent-glow, 22, 0.0, 0, 6);
+}
+
+.converter-view .button.hero:disabled {
+    -fx-effect: null;
+}
+
+/* --- previews --------------------------------------------------------------------------- */
 
 /*
  * Faint diagonal hatching behind the image, so a transparent region reads as "nothing here"
  * instead of as white. Kept low-contrast: it is a backdrop, not something to look at.
+ *
+ * This one stays nearly opaque on purpose. The chequer needs a settled ground to read against, and
+ * the contrast of a solid well sunk into a translucent card is the depth cue that tells you the
+ * image is content rather than decoration.
  */
 .preview-frame {
     -fx-background-color:
-        -color-bg-inset,
+        -op-well,
         linear-gradient(from 0px 0px to 22px 22px, repeat,
             -color-border-muted 0%, -color-border-muted 3%,
             transparent 4%, transparent 100%);
-    -fx-background-radius: 6px;
-    -fx-border-color: -color-border-default;
-    -fx-border-radius: 6px;
+    -fx-background-radius: 10px;
+    -fx-background-insets: 0, 0;
+    -fx-border-color: -op-glass-stroke;
+    -fx-border-radius: 10px;
     -fx-padding: 12px;
 }
 
-.list-view {
-    -fx-background-color: -color-bg-default;
-    -fx-border-color: -color-border-default;
-    -fx-border-radius: 6px;
-    -fx-background-radius: 6px;
-}
+/* --- misc -------------------------------------------------------------------------------- */
 
-.flow-pane {
+.converter-view .flow-pane {
     -fx-padding: 2px 0 0 0;
 }
 
 /* Marks a text field whose contents the calculator would reject. AtlantaFX styles :danger on
    controls it knows about; the pseudo-class has to be declared for a plain TextField. */
-.text-field:danger {
+.converter-view .text-field:danger {
     -fx-border-color: -color-danger-emphasis;
     -fx-border-width: 1px;
-    -fx-border-radius: 4px;
+    -fx-border-radius: 8px;
 }
 
-/* The update notice, above everything else. Accent-tinted rather than a warning colour: a new
-   version is news, not a problem. */
+/* The update notice, floating like everything else. Accent-tinted rather than a warning colour:
+   a new version is news, not a problem. */
 .update-banner {
     -fx-background-color: -color-accent-subtle;
-    -fx-border-color: transparent transparent -color-accent-muted transparent;
-    -fx-border-width: 0 0 1px 0;
+    -fx-background-radius: 14px;
+    -fx-border-color: -color-accent-muted;
+    -fx-border-radius: 14px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, -op-shadow, 18, 0.0, 0, 5);
 }

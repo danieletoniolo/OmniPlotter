@@ -5,6 +5,7 @@ import atlantafx.base.theme.PrimerLight;
 import com.github.omniplotter.app.Log;
 import com.github.omniplotter.app.Settings;
 import javafx.application.Application;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
@@ -28,6 +29,8 @@ public class OmniPlotterApp extends Application {
         Theme.apply(Theme.preference());
 
         ConverterView view = new ConverterView(stage);
+        Theme.bind(view);
+
         Scene scene = new Scene(view, 1180, 760);
         scene.getStylesheets().add(
             OmniPlotterApp.class.getResource("/omniplotter.css").toExternalForm());
@@ -69,9 +72,32 @@ public class OmniPlotterApp extends Application {
         private Theme() {}
 
         private static boolean dark;
+        private static Parent root;
 
         public static boolean isDark() {
             return dark;
+        }
+
+        /**
+         * Remembers the root so the stylesheet can tell which theme is in force.
+         *
+         * <p>Swapping the user agent stylesheet changes every {@code -color-*} the Primer themes
+         * define, but leaves nothing an author stylesheet can select on — and the translucent
+         * surfaces need their own literal rgba values, because JavaFX CSS has no way to give a
+         * looked-up colour an alpha. A class on the root is what lets omniplotter.css declare those
+         * values twice and pick the right set.
+         */
+        public static void bind(Parent node) {
+            root = node;
+            markRoot();
+        }
+
+        private static void markRoot() {
+            if (root == null) {
+                return;
+            }
+            root.getStyleClass().removeAll("theme-dark", "theme-light");
+            root.getStyleClass().add(dark ? "theme-dark" : "theme-light");
         }
 
         public static void apply(boolean useDark) {
@@ -79,6 +105,7 @@ public class OmniPlotterApp extends Application {
             Application.setUserAgentStylesheet(
                 useDark ? new PrimerDark().getUserAgentStylesheet()
                         : new PrimerLight().getUserAgentStylesheet());
+            markRoot();
         }
 
         public static void toggle() {
