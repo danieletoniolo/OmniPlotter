@@ -36,6 +36,7 @@ public final class Settings {
     public static final String UPDATE_CHECK = "updates.check";
     public static final String UPDATE_LAST_CHECK = "updates.lastCheck";
     public static final String UPDATE_SKIPPED = "updates.skippedVersion";
+    public static final String UI_AURORA = "ui.aurora";
 
     private static Properties values;
 

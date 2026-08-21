@@ -37,6 +37,8 @@
     -op-row-selected:    rgba(31, 111, 235, 0.14);
     -op-thumb:           rgba(15, 23, 42, 0.18);
     -op-well:            rgba(15, 23, 42, 0.045);
+    -op-drop-veil:       rgba(234, 238, 244, 0.72);
+    -op-drop-fill:       rgba(255, 255, 255, 0.88);
 
     -fx-background-color: -op-backdrop;
 }
@@ -60,6 +62,8 @@
     -op-row-selected:    rgba(56, 139, 253, 0.22);
     -op-thumb:           rgba(255, 255, 255, 0.20);
     -op-well:            rgba(0, 0, 0, 0.28);
+    -op-drop-veil:       rgba(12, 16, 23, 0.76);
+    -op-drop-fill:       rgba(255, 255, 255, 0.07);
 }
 
 /* --- the backdrop ---------------------------------------------------------------------- */
@@ -257,4 +261,39 @@
     -fx-border-radius: 14px;
     -fx-border-width: 1px;
     -fx-effect: dropshadow(gaussian, -op-shadow, 18, 0.0, 0, 5);
+}
+
+/* --- the drop target ---------------------------------------------------------------------- */
+
+/*
+ * Shown while files are being dragged over the window. A veil rather than a highlight on the queue
+ * alone: the whole window accepts the drop, so the whole window should say so.
+ */
+.drop-overlay {
+    -fx-background-color: -op-drop-veil;
+}
+
+.drop-target {
+    -fx-background-color: -op-drop-fill;
+    -fx-background-radius: 20px;
+    -fx-border-color: -color-accent-emphasis;
+    -fx-border-radius: 20px;
+    -fx-border-width: 2px;
+    -fx-border-style: segments(10, 8) line-cap round;
+    -fx-effect: dropshadow(gaussian, -op-shadow-strong, 30, 0.0, 0, 10);
+}
+
+/*
+ * Ikonli exposes the icon size as a styleable property, which means the stylesheet beats
+ * setIconSize() — a call that looks like it works and silently does nothing. Both of the oversized
+ * icons in this window are therefore sized here.
+ */
+.drop-target .ikonli-font-icon {
+    -fx-icon-size: 44px;
+    -fx-icon-color: -color-accent-fg;
+}
+
+.drop-hint .ikonli-font-icon {
+    -fx-icon-size: 32px;
+    -fx-icon-color: -color-fg-muted;
 }

@@ -65,6 +65,7 @@ public class OmniPlotterApp extends Application {
         });
 
         stage.show();
+        view.playIntro();
     }
 
     /** Light and dark Primer themes, plus a guess at what the desktop is currently using. */

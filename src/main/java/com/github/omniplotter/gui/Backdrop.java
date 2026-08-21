@@ -1,8 +1,14 @@
 package com.github.omniplotter.gui;
 
+import com.github.omniplotter.app.Settings;
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
+import javafx.util.Duration;
 
 /**
  * The soft ground the glass surfaces sit on.
@@ -21,6 +27,11 @@ public class Backdrop extends Pane {
 
     private final Circle a = new Circle();
     private final Circle b = new Circle();
+    private final Timeline drift = buildDrift();
+
+    /** The user's preference, and whether there is anyone in front of the window to see it. */
+    private boolean enabled = Settings.getBoolean(Settings.UI_AURORA, true);
+    private boolean awake = true;
 
     public Backdrop() {
         getStyleClass().add("backdrop");
@@ -38,6 +49,63 @@ public class Backdrop extends Pane {
         clip.widthProperty().bind(widthProperty());
         clip.heightProperty().bind(heightProperty());
         setClip(clip);
+
+        sync();
+    }
+
+    /** The setting, which survives a restart. */
+    public void setEnabled(boolean on) {
+        enabled = on;
+        sync();
+    }
+
+    /**
+     * Whether the window is in front of someone.
+     *
+     * <p>An animation that never ends is a repaint that never ends. Ninety seconds of travel is
+     * cheap to watch and pointless to compute behind another window or in the dock.
+     */
+    public void setAwake(boolean on) {
+        awake = on;
+        sync();
+    }
+
+    private void sync() {
+        if (!enabled) {
+            // Back to the composition the static layout was designed around, not wherever the
+            // drift had got to when it was switched off.
+            drift.stop();
+            a.setTranslateX(0);
+            a.setTranslateY(0);
+            b.setTranslateX(0);
+            b.setTranslateY(0);
+        } else if (awake) {
+            drift.play();
+        } else {
+            drift.pause();
+        }
+    }
+
+    /**
+     * Slow enough to be noticed only by not being noticed. The two washes are given different
+     * distances and opposite directions, because equal ones read as the whole background sliding
+     * rather than as two things drifting.
+     */
+    private Timeline buildDrift() {
+        Timeline timeline = new Timeline(
+            new KeyFrame(Duration.ZERO,
+                new KeyValue(a.translateXProperty(), 0, Interpolator.EASE_BOTH),
+                new KeyValue(a.translateYProperty(), 0, Interpolator.EASE_BOTH),
+                new KeyValue(b.translateXProperty(), 0, Interpolator.EASE_BOTH),
+                new KeyValue(b.translateYProperty(), 0, Interpolator.EASE_BOTH)),
+            new KeyFrame(Duration.seconds(46),
+                new KeyValue(a.translateXProperty(), 92, Interpolator.EASE_BOTH),
+                new KeyValue(a.translateYProperty(), 56, Interpolator.EASE_BOTH),
+                new KeyValue(b.translateXProperty(), -74, Interpolator.EASE_BOTH),
+                new KeyValue(b.translateYProperty(), -98, Interpolator.EASE_BOTH)));
+        timeline.setAutoReverse(true);
+        timeline.setCycleCount(Timeline.INDEFINITE);
+        return timeline;
     }
 
     /**

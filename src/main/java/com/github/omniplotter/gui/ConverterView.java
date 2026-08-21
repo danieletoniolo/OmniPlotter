@@ -24,7 +24,9 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
@@ -79,6 +81,13 @@ public class ConverterView extends StackPane {
 
     private final Backdrop backdrop = new Backdrop();
     private final BorderPane content = new BorderPane();
+    private final StackPane dropOverlay = buildDropOverlay();
+
+    /** The floating surfaces, in the order they arrive on screen. */
+    private Node[] surfaces = new Node[0];
+
+    private Node sourcePane;
+    private Node previewPane;
 
     private final ObservableList<ConversionJob> jobs = FXCollections.observableArrayList();
     private final ListView<ConversionJob> queue = new ListView<>(jobs);
@@ -143,7 +152,12 @@ public class ConverterView extends StackPane {
         BorderPane.setMargin(settings, new Insets(GAP, GAP, GAP, GAP));
         BorderPane.setMargin(dock, new Insets(0, GAP, GAP, GAP));
 
-        getChildren().addAll(backdrop, content);
+        getChildren().addAll(backdrop, content, dropOverlay);
+        surfaces = new Node[] { queuePanel, sourcePane, previewPane, settings, dock };
+
+        // The washes only travel while there is someone in front of the window to see them.
+        stage.focusedProperty().addListener((o, was, now) -> backdrop.setAwake(now));
+        stage.iconifiedProperty().addListener((o, was, now) -> backdrop.setAwake(!now));
 
         wireCascade();
         wireDragAndDrop();
@@ -199,12 +213,13 @@ public class ConverterView extends StackPane {
     }
 
     private Node dropHint() {
+        // Sized from the stylesheet, not here: see the note beside .drop-hint in omniplotter.css.
         FontIcon icon = new FontIcon(Feather.UPLOAD_CLOUD);
-        icon.setIconSize(32);
         Label text = new Label("Drop images here");
         text.getStyleClass().add(Styles.TEXT_MUTED);
         VBox box = new VBox(8, icon, text);
         box.setAlignment(Pos.CENTER);
+        box.getStyleClass().add("drop-hint");
         return box;
     }
 
@@ -224,12 +239,12 @@ public class ConverterView extends StackPane {
         sizeWarning.setManaged(false);
         sizeWarning.setGraphic(new FontIcon(Feather.ALERT_TRIANGLE));
 
-        Node source = previewCard("Source", sourceView, sourceCaption);
-        Node preview = previewCard("Preview", previewView, previewCaption, sizeWarning);
-        HBox.setHgrow(source, Priority.ALWAYS);
-        HBox.setHgrow(preview, Priority.ALWAYS);
+        sourcePane = previewCard("Source", sourceView, sourceCaption);
+        previewPane = previewCard("Preview", previewView, previewCaption, sizeWarning);
+        HBox.setHgrow(sourcePane, Priority.ALWAYS);
+        HBox.setHgrow(previewPane, Priority.ALWAYS);
 
-        HBox row = new HBox(GAP, source, preview);
+        HBox row = new HBox(GAP, sourcePane, previewPane);
         return row;
     }
 
@@ -259,6 +274,34 @@ public class ConverterView extends StackPane {
         card.setMinWidth(0);
         card.setPrefWidth(0);
         return card;
+    }
+
+    /**
+     * What a dragged file lands on.
+     *
+     * <p>Until now the window answered a drag with nothing at all: the pointer crossed it, the
+     * files went in, and in between there was no way to tell the window had noticed. Mouse
+     * transparent, because the handlers that drive it sit on the root and everything has to reach
+     * them.
+     */
+    private StackPane buildDropOverlay() {
+        FontIcon icon = new FontIcon(Feather.UPLOAD_CLOUD);
+
+        Label text = new Label("Drop to add");
+        text.getStyleClass().add(Styles.TITLE_3);
+
+        VBox target = new VBox(14, icon, text);
+        target.setAlignment(Pos.CENTER);
+        target.setPadding(new Insets(44, 76, 44, 76));
+        target.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        target.getStyleClass().add("drop-target");
+
+        StackPane overlay = new StackPane(target);
+        overlay.getStyleClass().add("drop-overlay");
+        overlay.setMouseTransparent(true);
+        overlay.setVisible(false);
+        overlay.setOpacity(0);
+        return overlay;
     }
 
     // --- settings ---------------------------------------------------------------------------
@@ -340,8 +383,20 @@ public class ConverterView extends StackPane {
 
         outputLabel.getStyleClass().add(Styles.TEXT_MUTED);
 
-        Button theme = iconButton(Feather.MOON, "Light / dark", OmniPlotterApp.Theme::toggle);
+        Button theme = iconButton(Feather.MOON, "Light / dark — right-click for more",
+            OmniPlotterApp.Theme::toggle);
         theme.getStyleClass().add(Styles.FLAT);
+
+        // A moving background is a running repaint, which not everyone wants on a laptop. It is
+        // parked on the theme button because that is already where the look of the window is set.
+        CheckMenuItem animated = new CheckMenuItem("Animated background");
+        animated.setSelected(Settings.getBoolean(Settings.UI_AURORA, true));
+        animated.setOnAction(e -> {
+            Settings.setBoolean(Settings.UI_AURORA, animated.isSelected());
+            Settings.save();
+            backdrop.setEnabled(animated.isSelected());
+        });
+        theme.setContextMenu(new ContextMenu(animated));
 
         // The window logs where its user cannot see it, so the way to that file has to be in the
         // window itself — otherwise a bug report can only say that something did not work.
@@ -496,18 +551,18 @@ public class ConverterView extends StackPane {
     private void showSelection() {
         ConversionJob job = queue.getSelectionModel().getSelectedItem();
         if (job == null) {
-            sourceView.setImage(null);
-            previewView.setImage(null);
+            Animations.swap(sourceView, null);
+            Animations.swap(previewView, null);
             sourceCaption.setText("No image selected");
             previewCaption.setText("");
             return;
         }
         BufferedImage src = job.source();
         if (src == null) {
-            sourceView.setImage(null);
+            Animations.swap(sourceView, null);
             sourceCaption.setText("Could not read this file: " + job.error());
         } else {
-            sourceView.setImage(SwingFXUtils.toFXImage(src, null));
+            Animations.swap(sourceView, SwingFXUtils.toFXImage(src, null));
             sourceCaption.setText(job.name() + " — " + src.getWidth() + " × " + src.getHeight());
         }
         schedulePreview();
@@ -526,7 +581,7 @@ public class ConverterView extends StackPane {
         ConversionJob job = queue.getSelectionModel().getSelectedItem();
         Format format = formatBox.getValue();
         if (job == null || format == null || job.source() == null) {
-            previewView.setImage(null);
+            Animations.swap(previewView, null);
             previewCaption.setText("");
             sizeWarning.setVisible(false);
             sizeWarning.setManaged(false);
@@ -551,7 +606,7 @@ public class ConverterView extends StackPane {
             }
             ConversionJob.Preview preview = task.getValue();
             BufferedImage out = preview.image();
-            previewView.setImage(SwingFXUtils.toFXImage(out, null));
+            Animations.swap(previewView, SwingFXUtils.toFXImage(out, null));
             previewCaption.setText(String.format(java.util.Locale.ROOT, "%s — %d × %d, %d colours, %s",
                 format.id(), out.getWidth(), out.getHeight(), countColors(out),
                 humanSize(preview.encodedSize())));
@@ -567,7 +622,7 @@ public class ConverterView extends StackPane {
             if (generation != previewGeneration) {
                 return;
             }
-            previewView.setImage(null);
+            Animations.swap(previewView, null);
             previewCaption.setText("Preview failed: " + task.getException().getMessage());
             sizeWarning.setVisible(false);
             sizeWarning.setManaged(false);
@@ -688,7 +743,24 @@ public class ConverterView extends StackPane {
 
     // --- input ------------------------------------------------------------------------------
 
+    /**
+     * Handlers on the root rather than on the panels.
+     *
+     * <p>Entering a child does not exit its parent, so the overlay put up on entering the window
+     * stays up while the pointer crosses the panels inside it — which is what the same handlers
+     * spread over the four surfaces would flicker on.
+     */
     private void wireDragAndDrop() {
+        setOnDragEntered((DragEvent e) -> {
+            if (e.getDragboard().hasFiles()) {
+                Animations.reveal(dropOverlay, true);
+            }
+            e.consume();
+        });
+        setOnDragExited((DragEvent e) -> {
+            Animations.reveal(dropOverlay, false);
+            e.consume();
+        });
         setOnDragOver((DragEvent e) -> {
             if (e.getDragboard().hasFiles()) {
                 e.acceptTransferModes(TransferMode.COPY);
@@ -696,6 +768,7 @@ public class ConverterView extends StackPane {
             e.consume();
         });
         setOnDragDropped((DragEvent e) -> {
+            Animations.reveal(dropOverlay, false);
             if (e.getDragboard().hasFiles()) {
                 addFiles(e.getDragboard().getFiles());
                 e.setDropCompleted(true);
@@ -817,6 +890,7 @@ public class ConverterView extends StackPane {
             Node banner = updateBanner(result);
             BorderPane.setMargin(banner, new Insets(GAP, GAP, 0, GAP));
             content.setTop(banner);
+            Animations.dropIn(banner);
         }));
     }
 
@@ -834,10 +908,10 @@ public class ConverterView extends StackPane {
         skip.setOnAction(e -> {
             Settings.set(Settings.UPDATE_SKIPPED, result.latest().toString());
             Settings.save();
-            content.setTop(null);
+            hideBanner();
         });
 
-        Button dismiss = iconButton(Feather.X, "Dismiss", () -> content.setTop(null));
+        Button dismiss = iconButton(Feather.X, "Dismiss", this::hideBanner);
         dismiss.getStyleClass().add(Styles.FLAT);
 
         Region spacer = new Region();
@@ -848,6 +922,23 @@ public class ConverterView extends StackPane {
         banner.setPadding(new Insets(10, 12, 10, 16));
         banner.getStyleClass().add("update-banner");
         return banner;
+    }
+
+    private void hideBanner() {
+        Node banner = content.getTop();
+        if (banner != null) {
+            Animations.dismiss(banner, () -> content.setTop(null));
+        }
+    }
+
+    /**
+     * The surfaces settling into place, played once the window is on screen.
+     *
+     * <p>Called by {@link OmniPlotterApp} rather than from the constructor: before the stage is
+     * shown there is no layout, and a rise from an unlaid-out position is a jump.
+     */
+    public void playIntro() {
+        Animations.intro(surfaces);
     }
 
     /** Writes the current selection back. Called once, when the window is closing. */
