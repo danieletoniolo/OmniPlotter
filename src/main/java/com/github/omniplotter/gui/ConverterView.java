@@ -89,6 +89,9 @@ public class ConverterView extends StackPane {
     private Node sourcePane;
     private Node previewPane;
 
+    private SidePanel queueSide;
+    private SidePanel settingsSide;
+
     private final ObservableList<ConversionJob> jobs = FXCollections.observableArrayList();
     private final ListView<ConversionJob> queue = new ListView<>(jobs);
 
@@ -134,26 +137,30 @@ public class ConverterView extends StackPane {
         this.stage = stage;
         getStyleClass().add("converter-view");
 
-        Node queuePanel = buildQueuePanel();
+        Node queueBox = buildQueuePanel();
         Node previews = buildPreviewPanel();
-        Node settings = buildSettingsPanel();
+        Node settingsBox = buildSettingsPanel();
         Node dock = buildActionBar();
 
-        content.setLeft(queuePanel);
+        content.setLeft(queueBox);
         content.setCenter(previews);
-        content.setRight(settings);
+        content.setRight(settingsBox);
         content.setBottom(dock);
 
         // The gaps are the only thing separating the surfaces now that the 1px rules are gone, so
         // they have to be even. Each region carries the space on the sides it owns, and it is the
         // bottom margins of the row above that hold the dock clear of it.
-        BorderPane.setMargin(queuePanel, new Insets(GAP, 0, GAP, GAP));
+        BorderPane.setMargin(queueBox, new Insets(GAP, 0, GAP, GAP));
         BorderPane.setMargin(previews, new Insets(GAP, 0, GAP, GAP));
-        BorderPane.setMargin(settings, new Insets(GAP, GAP, GAP, GAP));
+        BorderPane.setMargin(settingsBox, new Insets(GAP, GAP, GAP, GAP));
         BorderPane.setMargin(dock, new Insets(0, GAP, GAP, GAP));
 
         getChildren().addAll(backdrop, content, dropOverlay);
-        surfaces = new Node[] { queuePanel, sourcePane, previewPane, settings, dock };
+        surfaces = new Node[] { queueBox, sourcePane, previewPane, settingsBox, dock };
+
+        // Restored without animation: a fold the user made last week is not news to play back.
+        queueSide.setCollapsed(Settings.getBoolean(Settings.UI_QUEUE_FOLDED, false), false);
+        settingsSide.setCollapsed(Settings.getBoolean(Settings.UI_SETTINGS_FOLDED, false), false);
 
         // The washes only travel while there is someone in front of the window to see them.
         stage.focusedProperty().addListener((o, was, now) -> backdrop.setAwake(now));
@@ -170,7 +177,8 @@ public class ConverterView extends StackPane {
     // --- queue ------------------------------------------------------------------------------
 
     private Node buildQueuePanel() {
-        Node title = sectionTitle("Images", Feather.LAYERS);
+        Node title = sectionTitle("Images", Feather.LAYERS, Feather.CHEVRON_LEFT,
+            () -> queueSide.setCollapsed(true, true));
 
         queue.setPlaceholder(dropHint());
         queue.setCellFactory(list -> new ListCell<>() {
@@ -190,25 +198,65 @@ public class ConverterView extends StackPane {
         queue.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> showSelection());
         VBox.setVgrow(queue, Priority.ALWAYS);
 
-        Button add = iconButton(Feather.PLUS, "Add images", this::chooseFiles);
-        Button remove = iconButton(Feather.MINUS, "Remove selected", () -> {
-            jobs.removeAll(List.copyOf(queue.getSelectionModel().getSelectedItems()));
-            refreshStatus();
-        });
-        Button clear = iconButton(Feather.TRASH_2, "Remove all", () -> {
-            jobs.clear();
-            refreshStatus();
-        });
         queue.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
 
-        HBox buttons = new HBox(6, add, remove, clear);
+        HBox buttons = new HBox(6,
+            iconButton(Feather.PLUS, "Add images", this::chooseFiles),
+            iconButton(Feather.MINUS, "Remove selected", this::removeSelected),
+            iconButton(Feather.TRASH_2, "Remove all", this::clearQueue));
 
         VBox panel = new VBox(10, title, queue, buttons);
         panel.setPadding(new Insets(16));
-        panel.setPrefWidth(260);
-        panel.setMinWidth(200);
-        panel.getStyleClass().add("glass");
-        return panel;
+
+        queueSide = new SidePanel(panel, queueRail(), 260, Pos.TOP_LEFT);
+        return queueSide;
+    }
+
+    private void removeSelected() {
+        jobs.removeAll(List.copyOf(queue.getSelectionModel().getSelectedItems()));
+        refreshStatus();
+    }
+
+    private void clearQueue() {
+        jobs.clear();
+        refreshStatus();
+    }
+
+    /**
+     * What is left of the queue when it is folded away.
+     *
+     * <p>The three buttons come along because they are the part still worth reaching once the
+     * images are loaded — which is exactly when someone folds the list of their names away.
+     */
+    private Node queueRail() {
+        VBox rail = new VBox(10,
+            railTab(Feather.LAYERS, "Show images", () -> queueSide.setCollapsed(false, true)),
+            new Region(),
+            iconButton(Feather.PLUS, "Add images", this::chooseFiles),
+            iconButton(Feather.MINUS, "Remove selected", this::removeSelected),
+            iconButton(Feather.TRASH_2, "Remove all", this::clearQueue));
+        VBox.setVgrow(rail.getChildren().get(1), Priority.ALWAYS);
+        rail.setAlignment(Pos.TOP_CENTER);
+        rail.setPadding(new Insets(14, 0, 16, 0));
+        rail.getStyleClass().add("rail");
+        return rail;
+    }
+
+    private Node settingsRail() {
+        VBox rail = new VBox(10,
+            railTab(Feather.SLIDERS, "Show output settings",
+                () -> settingsSide.setCollapsed(false, true)));
+        rail.setAlignment(Pos.TOP_CENTER);
+        rail.setPadding(new Insets(14, 0, 16, 0));
+        rail.getStyleClass().add("rail");
+        return rail;
+    }
+
+    /** The icon that both names a folded panel and opens it again. */
+    private Button railTab(Feather icon, String tooltip, Runnable action) {
+        Button tab = iconButton(icon, tooltip, action);
+        tab.getStyleClass().addAll(Styles.FLAT, "rail-tab");
+        return tab;
     }
 
     private Node dropHint() {
@@ -309,7 +357,8 @@ public class ConverterView extends StackPane {
     // --- settings ---------------------------------------------------------------------------
 
     private Node buildSettingsPanel() {
-        Node title = sectionTitle("Output", Feather.SLIDERS);
+        Node title = sectionTitle("Output", Feather.SLIDERS, Feather.CHEVRON_RIGHT,
+            () -> settingsSide.setCollapsed(true, true));
 
         modeBox.setItems(FXCollections.observableArrayList(Mode.values()));
         modeBox.setConverter(labeller(m -> m == Mode.VAR ? "Picture file" : "Python script"));
@@ -353,24 +402,27 @@ public class ConverterView extends StackPane {
             field("Slot number", onCalcNumber),
             onCalcHint);
         panel.setPadding(new Insets(16));
-        panel.setPrefWidth(300);
-        panel.setMinWidth(260);
 
         ScrollPane scroll = new ScrollPane(panel);
         scroll.setFitToWidth(true);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        // On the content the surface would scroll away with it, and the viewport would cut off its
-        // shadow. It has to be the frame that is made of glass.
-        scroll.getStyleClass().add("glass");
-        return scroll;
+
+        settingsSide = new SidePanel(scroll, settingsRail(), 300, Pos.TOP_RIGHT);
+        return settingsSide;
     }
 
-    /** A panel heading. The icon is what gives the two side panels a shared rhythm. */
-    private Node sectionTitle(String text, Feather icon) {
+    /** A panel heading: the icon gives the two side panels a shared rhythm, the chevron folds. */
+    private Node sectionTitle(String text, Feather icon, Feather chevron, Runnable fold) {
         Label label = new Label(text);
         label.getStyleClass().add(Styles.TITLE_4);
 
-        HBox box = new HBox(8, new FontIcon(icon), label);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button collapse = iconButton(chevron, "Collapse this panel", fold);
+        collapse.getStyleClass().add(Styles.FLAT);
+
+        HBox box = new HBox(8, new FontIcon(icon), label, spacer, collapse);
         box.setAlignment(Pos.CENTER_LEFT);
         box.getStyleClass().add("section-title");
         return box;
@@ -961,6 +1013,8 @@ public class ConverterView extends StackPane {
     /** Writes the current selection back. Called once, when the window is closing. */
     public void rememberState() {
         Settings.set(Settings.OUTPUT_DIR, outputDir.toString());
+        Settings.setBoolean(Settings.UI_QUEUE_FOLDED, queueSide.isCollapsed());
+        Settings.setBoolean(Settings.UI_SETTINGS_FOLDED, settingsSide.isCollapsed());
         if (modeBox.getValue() != null) {
             Settings.set(Settings.LAST_MODE, modeBox.getValue().toString());
         }

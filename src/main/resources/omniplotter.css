@@ -234,6 +234,31 @@
     -fx-icon-color: -color-accent-fg;
 }
 
+/* The chevron that folds the panel is a control, not part of the heading; it should not take the
+   accent the section icon beside it has. */
+.section-title .button .ikonli-font-icon {
+    -fx-icon-size: 15px;
+    -fx-icon-color: -color-fg-muted;
+}
+
+.section-title .button:hover .ikonli-font-icon {
+    -fx-icon-color: -color-fg-default;
+}
+
+/* --- the folded rail ----------------------------------------------------------------------- */
+
+/* The panel around it is already the surface; the rail only arranges what is left on it. */
+.rail {
+    -fx-background-color: transparent;
+}
+
+/* Its top button both says which panel this is and opens it, so it keeps the accent the heading
+   icon carries when the panel is open. */
+.rail-tab .ikonli-font-icon {
+    -fx-icon-size: 18px;
+    -fx-icon-color: -color-accent-fg;
+}
+
 /* The figure has to fit inside the ring, which at dock size it does not do at the default
    size. Selected as a Label: the skin's own class for it is the generic "progress". */
 .converter-view .ring-progress-indicator .label {
