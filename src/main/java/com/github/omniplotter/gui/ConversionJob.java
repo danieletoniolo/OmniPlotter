@@ -113,6 +113,26 @@ public class ConversionJob {
         return excludedTiles.computeIfAbsent(page, p -> new HashSet<>());
     }
 
+    /**
+     * Gives every page the exclusions of the one being looked at.
+     *
+     * <p>Replaces rather than adds to what the other pages had. A recurring header is the case this
+     * is for, and "these cells, everywhere" is a sentence someone can check against the document;
+     * merging would leave a state that is the sum of several past decisions and visible on none of
+     * the pages at once.
+     *
+     * @return how many pages it was applied to
+     */
+    public int applyExclusionsToAllPages() {
+        Set<String> current = Set.copyOf(excludedTiles());
+        for (int other = 1; other <= pageCount(); other++) {
+            Set<String> forPage = excludedTiles.computeIfAbsent(other, p -> new HashSet<>());
+            forPage.clear();
+            forPage.addAll(current);
+        }
+        return pageCount();
+    }
+
     public void setExcludedTiles(Set<String> excluded) {
         Set<String> forPage = excludedTiles.computeIfAbsent(page, p -> new HashSet<>());
         forPage.clear();

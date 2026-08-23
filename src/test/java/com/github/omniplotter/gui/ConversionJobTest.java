@@ -87,6 +87,57 @@ class ConversionJobTest {
     }
 
     @Test
+    void oneSayingCanBeGivenToEveryPage(@TempDir Path directory) throws IOException {
+        // The recurring header: switch it off once, then say so for the whole document.
+        ConversionJob job = document(directory);
+        job.setTiling(Tiling.of(3, 2));
+        job.setPage(2);
+        job.setExcludedTiles(Set.of("r1c1", "r1c2"));
+
+        assertEquals(3, job.applyExclusionsToAllPages());
+
+        for (int page = 1; page <= 3; page++) {
+            job.setPage(page);
+            assertEquals(Set.of("r1c1", "r1c2"), job.excludedTiles(), "page " + page);
+        }
+    }
+
+    @Test
+    void applyingToEveryPageReplacesWhatTheyHad(@TempDir Path directory) throws IOException {
+        // Replacing and not merging, so what the button says is what the document ends up in.
+        ConversionJob job = document(directory);
+        job.setTiling(Tiling.of(3, 2));
+        job.setPage(3);
+        job.setExcludedTiles(Set.of("r3c1"));
+        job.setPage(1);
+        job.setExcludedTiles(Set.of("r1c1"));
+
+        job.applyExclusionsToAllPages();
+
+        job.setPage(3);
+        assertEquals(Set.of("r1c1"), job.excludedTiles());
+    }
+
+    @Test
+    void puttingThemAllBackTravelsToo(@TempDir Path directory) throws IOException {
+        // How a decision applied to the whole document is taken back: include everything here,
+        // then say that everywhere.
+        ConversionJob job = document(directory);
+        job.setTiling(Tiling.of(3, 2));
+        job.setExcludedTiles(Set.of("r1c1"));
+        job.applyExclusionsToAllPages();
+
+        job.setPage(2);
+        job.setExcludedTiles(Set.of());
+        job.applyExclusionsToAllPages();
+
+        for (int page = 1; page <= 3; page++) {
+            job.setPage(page);
+            assertTrue(job.excludedTiles().isEmpty(), "page " + page);
+        }
+    }
+
+    @Test
     void changingTheGridClearsEveryPage(@TempDir Path directory) throws IOException {
         ConversionJob job = document(directory);
         job.setTiling(Tiling.of(3, 2));

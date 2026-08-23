@@ -134,6 +134,7 @@ public class ConverterView extends StackPane {
     private final Button nextTile = new Button("\u203a");
     private final Button excludeTile = new Button("Exclude this tile");
     private final Button includeAll = new Button("Include all");
+    private final Button applyToPages = new Button("Apply to all pages");
     private VBox tileControls;
     private final Label pageLabel = new Label();
     private final Button previousPage = new Button("\u2039");
@@ -612,11 +613,17 @@ public class ConverterView extends StackPane {
             gridOverlay.includeEverything();
             updateTileCount();
         });
+        applyToPages.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
+        applyToPages.setTooltip(new Tooltip(
+            "Give every page of this document exactly what this one has, replacing whatever they "
+                + "had — including putting them all back when nothing here is switched off"));
+        applyToPages.setOnAction(e -> applyExclusionsEverywhere());
+
         HBox tileButtons = new HBox(8, excludeTile, includeAll);
         tileButtons.setAlignment(Pos.CENTER_LEFT);
 
         tileCount.getStyleClass().add(Styles.TEXT_MUTED);
-        tileControls = new VBox(8, tileNav, tileButtons, tileCount);
+        tileControls = new VBox(8, tileNav, tileButtons, applyToPages, tileCount);
 
         previousPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
         nextPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
@@ -841,7 +848,30 @@ public class ConverterView extends StackPane {
         boolean anyExcluded = included != tiling.count();
         includeAll.setVisible(anyExcluded);
         includeAll.setManaged(anyExcluded);
+
+        // Offered whenever there is more than one page, and not only when something is switched
+        // off: "every tile, everywhere" is as much a thing to say as "not this one, anywhere", and
+        // putting them all back on one page is how you take back a decision applied to the lot.
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        boolean manyPages = job != null && job.pageCount() > 1;
+        applyToPages.setVisible(manyPages);
+        applyToPages.setManaged(manyPages);
+
         tileCount.setText(included + " of " + tiling.count() + " tiles will be converted");
+    }
+
+    private void applyExclusionsEverywhere() {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        if (job == null) {
+            return;
+        }
+        int cells = job.excludedTiles().size();
+        int pages = job.applyExclusionsToAllPages();
+        // Said out loud: it changed pages that are not on screen, so nothing else would show it.
+        status.setText(cells == 0
+            ? "All " + pages + " pages now have every tile included."
+            : "Those " + cells + (cells == 1 ? " cell is" : " cells are")
+                + " now switched off on all " + pages + " pages.");
     }
 
     /** The pieces of the page now on screen, in reading order. */
