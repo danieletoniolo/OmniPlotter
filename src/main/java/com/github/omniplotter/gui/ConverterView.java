@@ -163,6 +163,9 @@ public class ConverterView extends StackPane {
     /** True while the toggle is being set to match the selection rather than by the user. */
     private boolean restoringCropTool;
 
+    /** The same, for the grid picker: rebuilding its list must not read as choosing from it. */
+    private boolean syncingGrid;
+
     private final TextField onCalcName = new TextField();
     private final Spinner<Integer> onCalcNumber = new Spinner<>(0, 9, 1);
     private final Label onCalcHint = new Label();
@@ -732,11 +735,17 @@ public class ConverterView extends StackPane {
         candidates.add(null);
         candidates.addAll(TileGrid.candidatesFor(page, widthSpinner.getValue(), heightSpinner.getValue()));
 
-        updating = true;
+        // Turning a page does not change which grids fit it. Replacing the list anyway would empty
+        // the picker for an instant, and an empty picker is a grid of none.
+        if (candidates.equals(gridBox.getItems())) {
+            return;
+        }
+
+        syncingGrid = true;
         gridBox.setItems(FXCollections.observableArrayList(candidates));
         gridBox.getSelectionModel().select(
             current != null && candidates.contains(current) ? current : null);
-        updating = false;
+        syncingGrid = false;
     }
 
     /** A grid and a crop are two ways of saying which part of the image matters; one at a time. */
@@ -754,7 +763,11 @@ public class ConverterView extends StackPane {
 
         // The job has to know the grid before anyone asks it what the pieces are, and the
         // resolution has to be set before the page is rendered to answer that.
-        if (job != null) {
+        //
+        // Not while the picker is only being rebuilt, though. Setting its items empties it for an
+        // instant, which arrives here as a choice of no grid — and a job told it has no grid
+        // forgets which cells were switched off, which is how turning a page used to lose them.
+        if (job != null && !syncingGrid) {
             job.setTiling(tiling);
             applyRenderDpi(job, tiling);
         }
