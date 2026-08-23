@@ -15,6 +15,10 @@ import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Framing;
 import com.github.omniplotter.engine.data.Look;
+import com.github.omniplotter.engine.data.PageSize;
+import com.github.omniplotter.engine.data.Tile;
+import com.github.omniplotter.engine.data.TileGrid;
+import com.github.omniplotter.engine.data.Tiling;
 import com.github.omniplotter.engine.data.Mode;
 import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
@@ -121,6 +125,15 @@ public class ConverterView extends StackPane {
     private final CheckBox fill = new CheckBox("Fill the canvas");
     private final ToggleButton cropToggle = new ToggleButton("Crop");
     private CropOverlay cropOverlay;
+    private GridOverlay gridOverlay;
+
+    private final ComboBox<TileGrid> gridBox = new ComboBox<>();
+    private final Label tileCount = new Label();
+    private final Label pageLabel = new Label();
+    private final Button previousPage = new Button("\u2039");
+    private final Button nextPage = new Button("\u203a");
+    /** The piece the preview is showing, so clicking a cell shows what is in it. */
+    private Tile focusedTile;
     /**
      * The job the overlay is currently drawing on.
      *
@@ -331,8 +344,17 @@ public class ConverterView extends StackPane {
 
         cropOverlay = new CropOverlay(sourceView);
         cropOverlay.setOnChange(this::cropChanged);
+        gridOverlay = new GridOverlay(sourceView);
+        gridOverlay.setOnTileClicked(this::tileClicked);
+        gridOverlay.setOnChange(this::gridChanged);
 
-        sourcePane = previewCard("Source", sourceView, cropOverlay, sourceCaption);
+        // Both draw over the same picture and only one is ever live, but the pane holding them
+        // must not swallow what neither of them wants: picking on bounds would put a transparent
+        // lid over the card the window accepts drops on.
+        StackPane overlays = new StackPane(gridOverlay, cropOverlay);
+        overlays.setPickOnBounds(false);
+
+        sourcePane = previewCard("Source", sourceView, overlays, sourceCaption);
         previewPane = previewCard("Preview", previewView, null, previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
         // being produced. An accent edge is enough; the caption underneath already names the format.
@@ -551,6 +573,29 @@ public class ConverterView extends StackPane {
         HBox cropRow = new HBox(6, cropToggle, clearCrop);
         cropRow.setAlignment(Pos.CENTER_LEFT);
 
+        gridBox.setMaxWidth(Double.MAX_VALUE);
+        gridBox.setConverter(labeller(grid -> grid == null ? "Whole page, one file"
+            : grid + "  —  " + grid.count() + " tiles, "
+                + String.format("%.0f", grid.lineHeight()) + " px lines"
+                + (grid.isLegible() ? "" : ", too small to read")));
+        gridBox.valueProperty().addListener((o, was, now) -> gridSelected(now));
+
+        Button includeAll = new Button("Include all");
+        includeAll.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
+        includeAll.setOnAction(e -> gridOverlay.includeEverything());
+
+        tileCount.getStyleClass().add(Styles.TEXT_MUTED);
+        HBox tileRow = new HBox(8, tileCount, includeAll);
+        tileRow.setAlignment(Pos.CENTER_LEFT);
+
+        previousPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        nextPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        previousPage.setOnAction(e -> turnPage(-1));
+        nextPage.setOnAction(e -> turnPage(1));
+        pageLabel.getStyleClass().add(Styles.TEXT_MUTED);
+        HBox pageRow = new HBox(8, previousPage, pageLabel, nextPage);
+        pageRow.setAlignment(Pos.CENTER_LEFT);
+
         body.getChildren().addAll(
             lookChips,
             field("Dithering", ditherBox),
@@ -560,7 +605,11 @@ public class ConverterView extends StackPane {
             slider("Saturation", saturation),
             slider("Sharpen", sharpen),
             fill,
-            cropRow);
+            cropRow,
+            new Separator(),
+            field("Cut the page into", gridBox),
+            tileRow,
+            pageRow);
 
         return new VBox(10, header, body);
     }
@@ -636,6 +685,125 @@ public class ConverterView extends StackPane {
         cropOverlay.setAspect(fill.isSelected() && heightSpinner.getValue() > 0
             ? (double) widthSpinner.getValue() / heightSpinner.getValue()
             : 0);
+    }
+
+    /**
+     * Offers the grids that suit the screen this format draws on.
+     *
+     * <p>Rebuilt whenever the canvas or the page changes, because both move the arithmetic: the
+     * same document cut for a 2:1 screen and for a 4:3 one wants different grids.
+     */
+    private void refreshGrids() {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        PageSize page = job == null ? null : job.pageSize();
+        if (page == null) {
+            page = PageSize.A4;
+        }
+
+        TileGrid current = gridBox.getValue();
+        List<TileGrid> candidates = new ArrayList<>();
+        candidates.add(null);
+        candidates.addAll(TileGrid.candidatesFor(page, widthSpinner.getValue(), heightSpinner.getValue()));
+
+        updating = true;
+        gridBox.setItems(FXCollections.observableArrayList(candidates));
+        gridBox.getSelectionModel().select(
+            current != null && candidates.contains(current) ? current : null);
+        updating = false;
+    }
+
+    /** A grid and a crop are two ways of saying which part of the image matters; one at a time. */
+    private void gridSelected(TileGrid grid) {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        Tiling tiling = grid == null ? Tiling.NONE : grid.tiling();
+
+        if (grid != null && cropToggle.isSelected()) {
+            cropToggle.setSelected(false);
+        }
+        cropToggle.setDisable(grid != null);
+
+        gridOverlay.setTiling(tiling);
+        gridOverlay.setActive(grid != null);
+        focusedTile = null;
+        if (job != null) {
+            job.setTiling(tiling);
+            applyRenderDpi(job, tiling);
+        }
+        updateTileCount();
+        if (!updating) {
+            showSelection();
+        }
+    }
+
+    /**
+     * Tells the job how finely to render its page.
+     *
+     * <p>Derived from what the output needs rather than fixed: three columns of A4 onto a 384-pixel
+     * screen is 139 dots per inch, and rendering below that and enlarging afterwards is what makes
+     * a document converter look cheap.
+     */
+    private void applyRenderDpi(ConversionJob job, Tiling tiling) {
+        PageSize page = job.pageSize();
+        if (page == null) {
+            return;
+        }
+        double needed = (double) widthSpinner.getValue() * tiling.columns() / page.widthInches();
+        job.setRenderDpi((int) Math.ceil(needed * 2));
+    }
+
+    private void tileClicked(Tile tile) {
+        focusedTile = tile;
+        schedulePreview();
+    }
+
+    private void gridChanged() {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        if (job != null) {
+            job.setExcludedTiles(gridOverlay.excluded());
+        }
+        updateTileCount();
+        schedulePreview();
+    }
+
+    private void updateTileCount() {
+        Tiling tiling = gridOverlay.tiling();
+        if (tiling.isWhole()) {
+            tileCount.setText("");
+            tileCount.setVisible(false);
+            tileCount.setManaged(false);
+            return;
+        }
+        tileCount.setVisible(true);
+        tileCount.setManaged(true);
+        int included = gridOverlay.includedCount();
+        tileCount.setText(included + " of " + tiling.count() + " tiles"
+            + (included == tiling.count() ? "" : " — click a cell to put it back"));
+    }
+
+    private void turnPage(int by) {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        if (job == null) {
+            return;
+        }
+        job.setPage(job.page() + by);
+        showSelection();
+    }
+
+    private void updatePageControls(ConversionJob job) {
+        boolean document = job != null && job.isDocument();
+        pageRowVisible(document);
+        if (document) {
+            pageLabel.setText("Page " + job.page() + " of " + job.pageCount());
+            previousPage.setDisable(job.page() <= 1);
+            nextPage.setDisable(job.page() >= job.pageCount());
+        }
+    }
+
+    private void pageRowVisible(boolean visible) {
+        for (Node node : new Node[]{previousPage, nextPage, pageLabel}) {
+            node.setVisible(visible);
+            node.setManaged(visible);
+        }
     }
 
     /** The crop belongs to the image, not to the settings: each queued file keeps its own. */
@@ -746,6 +914,7 @@ public class ConverterView extends StackPane {
 
         widthSpinner.valueProperty().addListener((o, was, now) -> {
             updateCropAspect();
+            refreshGrids();
             schedulePreview();
         });
         heightSpinner.valueProperty().addListener((o, was, now) -> {
@@ -863,18 +1032,60 @@ public class ConverterView extends StackPane {
             .withDither(ditherBox.getValue() == null ? Dither.AUTO : ditherBox.getValue())
             // The crop comes off the job and everything else off the panel: one rectangle shared
             // by ten different photographs would be a rectangle that suits none of them.
-            .withFraming(new Framing(fill.isSelected(), job == null ? null : job.crop()))
+            .withFraming(new Framing(fill.isSelected(), previewCrop(job)))
             .clampedTo(format);
+    }
+
+    /**
+     * Which rectangle the preview should show.
+     *
+     * <p>With a grid up that is a tile — the one last clicked, or the first that will actually be
+     * converted — because a preview of the whole page while producing twenty-four pieces of it
+     * would be showing something nobody asked for.
+     */
+    private Crop previewCrop(ConversionJob job) {
+        if (job == null) {
+            return null;
+        }
+        Tiling tiling = job.tiling();
+        if (tiling.isWhole()) {
+            return job.crop();
+        }
+        BufferedImage src = job.source();
+        if (src == null || !tiling.fits(src.getWidth(), src.getHeight())) {
+            return job.crop();
+        }
+        List<Tile> tiles = tiling.tilesOf(src.getWidth(), src.getHeight());
+        if (focusedTile != null) {
+            for (Tile tile : tiles) {
+                if (tile.label().equals(focusedTile.label())) {
+                    return tile.crop();
+                }
+            }
+        }
+        for (Tile tile : tiles) {
+            if (!job.excludedTiles().contains(tile.label())) {
+                return tile.crop();
+            }
+        }
+        return tiles.get(0).crop();
     }
 
     private void showSelection() {
         ConversionJob job = queue.getSelectionModel().getSelectedItem();
         croppingJob = job;
+        updatePageControls(job);
+        if (job != null) {
+            applyRenderDpi(job, job.tiling());
+        }
+        refreshGrids();
+        updateTileCount();
 
         if (job == null) {
             // Nothing selected, so there is nothing to draw a rectangle on — including when the
             // image being cropped is the one that was just deleted.
             cropOverlay.setImage(0, 0, null);
+            gridOverlay.setImage(0, 0);
             restoreCropTool(null);
             Animations.swap(sourceView, null);
             Animations.swap(previewView, null);
@@ -896,6 +1107,11 @@ public class ConverterView extends StackPane {
             // only on the image it was switched on for.
             cropOverlay.setImage(src.getWidth(), src.getHeight(), job.crop());
             restoreCropTool(job);
+
+            gridOverlay.setImage(src.getWidth(), src.getHeight());
+            gridOverlay.setTiling(job.tiling());
+            gridOverlay.setExcluded(job.excludedTiles());
+            gridOverlay.setActive(!job.tiling().isWhole());
         }
         schedulePreview();
     }
@@ -1027,6 +1243,9 @@ public class ConverterView extends StackPane {
         progress.setVisible(true);
         progress.setProgress(0);
 
+        // Counted rather than assumed: with a grid up, one queued page is twenty-four files, and
+        // reporting the number of images converted would be answering a question nobody asked.
+        int[] written = {0};
         Task<List<String>> task = new Task<>() {
             @Override
             protected List<String> call() {
@@ -1034,7 +1253,7 @@ public class ConverterView extends StackPane {
                 for (int i = 0; i < pending.size(); i++) {
                     ConversionJob job = pending.get(i);
                     try {
-                        job.convert(format, currentOptionsFor(job), destination);
+                        written[0] += job.convert(format, currentOptionsFor(job), destination).size();
                     } catch (Exception e) {
                         failures.add(job.name() + ": " + e.getMessage());
                     }
@@ -1049,7 +1268,7 @@ public class ConverterView extends StackPane {
             progress.setVisible(false);
             convertButton.setDisable(false);
             List<String> failures = task.getValue();
-            int ok = pending.size() - failures.size();
+            int ok = written[0];
             status.setText(failures.isEmpty()
                 ? ok + (ok == 1 ? " file written to " : " files written to ") + destination.getFileName()
                 : ok + " written, " + failures.size() + " failed — " + failures.get(0));

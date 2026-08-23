@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -176,6 +177,32 @@ class TilingTest {
         assertEquals(new PageSize(210, 297), PageSize.fromString("210x297"));
         assertEquals(297, PageSize.A4.rotated().widthMm());
         assertThrows(IllegalArgumentException.class, () -> PageSize.fromString("foolscap"));
+    }
+
+    @Test
+    void aPointFallsInTheCellDrawnUnderIt() {
+        Tiling tiling = new Tiling(2, 3, 0.10);
+
+        // 300x200 in three columns and two rows: cells of 100x100.
+        assertEquals("r1c1", tiling.tileAt(300, 200, 5, 5).label());
+        assertEquals("r1c2", tiling.tileAt(300, 200, 150, 20).label());
+        assertEquals("r2c3", tiling.tileAt(300, 200, 250, 150).label());
+
+        // The overlap means tiles reach past their cell, but a click just inside the second column
+        // is still the second column and not the first.
+        assertEquals("r1c2", tiling.tileAt(300, 200, 101, 10).label());
+        assertEquals("r1c1", tiling.tileAt(300, 200, 99, 10).label());
+    }
+
+    @Test
+    void theEdgesOfTheImageBelongToTheEdgeCells() {
+        Tiling tiling = new Tiling(2, 2, 0);
+
+        assertEquals("r1c1", tiling.tileAt(100, 100, 0, 0).label());
+        assertEquals("r2c2", tiling.tileAt(100, 100, 99, 99).label());
+        // And a point past the edge belongs to nothing, rather than to the nearest cell.
+        assertNull(tiling.tileAt(100, 100, 100, 50));
+        assertNull(tiling.tileAt(100, 100, -1, 50));
     }
 
     private static int dpiForColumns(List<TileGrid> grids, int columns) {

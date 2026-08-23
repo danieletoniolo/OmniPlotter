@@ -88,6 +88,27 @@ public record Tiling(int rows, int columns, double overlap) {
         return tiles;
     }
 
+    /**
+     * The piece a point falls in, or null if the point is off the image.
+     *
+     * <p>Answered on the plain grid rather than on the tiles themselves. The tiles overlap, so a
+     * point near a cut belongs to two of them, and the one meant is always the one drawn under the
+     * pointer.
+     */
+    public Tile tileAt(int imageWidth, int imageHeight, int x, int y) {
+        if (x < 0 || y < 0 || x >= imageWidth || y >= imageHeight || !fits(imageWidth, imageHeight)) {
+            return null;
+        }
+        int column = Math.min(columns, (int) ((long) x * columns / imageWidth) + 1);
+        int row = Math.min(rows, (int) ((long) y * rows / imageHeight) + 1);
+        for (Tile tile : tilesOf(imageWidth, imageHeight)) {
+            if (tile.row() == row && tile.column() == column) {
+                return tile;
+            }
+        }
+        return null;
+    }
+
     private static int edge(int index, int divisions, int total) {
         return (int) Math.round((double) index * total / divisions);
     }

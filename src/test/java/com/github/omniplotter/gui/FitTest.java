@@ -11,12 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * wrong by a few pixels — the rectangle simply selects slightly the wrong part of the picture, and
  * the only symptom is an output that is off by a sliver. Worth pinning down away from the toolkit.
  */
-class CropOverlayFitTest {
+class FitTest {
 
     @Test
     void aWideImageInATallBoxIsCentredVertically() {
         // 400x100 into 200x200: it fits by width, at half size, leaving 75 above and below.
-        CropOverlay.Fit fit = CropOverlay.Fit.of(200, 200, 400, 100);
+        Fit fit = Fit.of(200, 200, 400, 100);
 
         assertEquals(0.5, fit.scale(), 1e-9);
         assertEquals(0, fit.offsetX(), 1e-9);
@@ -25,7 +25,7 @@ class CropOverlayFitTest {
 
     @Test
     void aTallImageInAWideBoxIsCentredHorizontally() {
-        CropOverlay.Fit fit = CropOverlay.Fit.of(400, 200, 100, 400);
+        Fit fit = Fit.of(400, 200, 100, 400);
 
         assertEquals(0.5, fit.scale(), 1e-9);
         assertEquals(175, fit.offsetX(), 1e-9);
@@ -34,7 +34,7 @@ class CropOverlayFitTest {
 
     @Test
     void screenAndImageCoordinatesAreInverses() {
-        CropOverlay.Fit fit = CropOverlay.Fit.of(640, 480, 300, 200);
+        Fit fit = Fit.of(640, 480, 300, 200);
 
         for (int x : new int[]{0, 1, 149, 299, 300}) {
             assertEquals(x, fit.toImageX(fit.toScreenX(x)), "x=" + x);
@@ -46,7 +46,7 @@ class CropOverlayFitTest {
 
     @Test
     void theCornersOfTheImageLandOnTheCornersOfTheLetterbox() {
-        CropOverlay.Fit fit = CropOverlay.Fit.of(400, 200, 100, 400);
+        Fit fit = Fit.of(400, 200, 100, 400);
 
         assertEquals(fit.offsetX(), fit.toScreenX(0), 1e-9);
         assertEquals(400 - fit.offsetX(), fit.toScreenX(100), 1e-9);
@@ -58,7 +58,7 @@ class CropOverlayFitTest {
     void anEmptyImageDoesNotDivideByZero() {
         // The overlay is asked to draw before anything is loaded, and while a file that failed to
         // decode is selected.
-        CropOverlay.Fit fit = CropOverlay.Fit.of(400, 200, 0, 0);
+        Fit fit = Fit.of(400, 200, 0, 0);
 
         assertEquals(1, fit.scale(), 1e-9);
         assertEquals(0, fit.toImageX(0));

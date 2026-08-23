@@ -259,45 +259,7 @@ public class CropOverlay extends Pane {
 
     // --- geometry ---------------------------------------------------------------------------
 
-    /**
-     * Where the image actually sits inside the box it was given.
-     *
-     * <p>{@code ImageView} preserves the aspect ratio, so a picture the wrong shape for the card is
-     * centred with a gap on two sides, and none of the coordinates on screen mean anything until
-     * that gap is accounted for. Pulled out as a value with no JavaFX in it because it is the piece
-     * most likely to be subtly wrong, and this way it can be checked without a running toolkit.
-     *
-     * @param scale screen pixels per image pixel
-     */
-    record Fit(double scale, double offsetX, double offsetY) {
-
-        static Fit of(double boxWidth, double boxHeight, int imageWidth, int imageHeight) {
-            if (imageWidth <= 0 || imageHeight <= 0 || boxWidth <= 0 || boxHeight <= 0) {
-                return new Fit(1, 0, 0);
-            }
-            double scale = Math.min(boxWidth / imageWidth, boxHeight / imageHeight);
-            return new Fit(scale, (boxWidth - imageWidth * scale) / 2,
-                (boxHeight - imageHeight * scale) / 2);
-        }
-
-        double toScreenX(double imageX) {
-            return offsetX + imageX * scale;
-        }
-
-        double toScreenY(double imageY) {
-            return offsetY + imageY * scale;
-        }
-
-        int toImageX(double screenX) {
-            return (int) Math.round((screenX - offsetX) / scale);
-        }
-
-        int toImageY(double screenY) {
-            return (int) Math.round((screenY - offsetY) / scale);
-        }
-    }
-
-    /** Recomputed rather than remembered: resizing the window changes it. */
+    /** Recomputed rather than remembered: resizing the window changes it. See {@link Fit}. */
     private Fit fit() {
         return Fit.of(getWidth(), getHeight(), imageWidth, imageHeight);
     }
