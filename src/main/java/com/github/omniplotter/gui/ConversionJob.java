@@ -18,8 +18,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -55,7 +57,15 @@ public class ConversionJob {
     private int renderedDpi;
 
     private Tiling tiling = Tiling.NONE;
-    private final Set<String> excludedTiles = new HashSet<>();
+
+    /**
+     * Which cells are switched off, per page.
+     *
+     * <p>Per page and not per document: the choice is made by looking at a page, and a header that
+     * happens to sit in the same cell on page one is not a reason to drop that cell from page four
+     * unseen. Pages nobody has looked at keep everything.
+     */
+    private final Map<Integer, Set<String>> excludedTiles = new HashMap<>();
 
     public ConversionJob(File file) {
         this.file = file;
@@ -85,7 +95,12 @@ public class ConversionJob {
         return tiling;
     }
 
-    /** A different grid invalidates which cells were switched off, since they described the old one. */
+    /**
+     * A different grid invalidates every page's exclusions, since they described the old one.
+     *
+     * <p>That part is not per page: {@code r1c1} of a six-by-two grid is a different piece of paper
+     * from {@code r1c1} of an eight-by-three one, on every page alike.
+     */
     public void setTiling(Tiling tiling) {
         if (!this.tiling.equals(tiling)) {
             excludedTiles.clear();
@@ -93,13 +108,15 @@ public class ConversionJob {
         this.tiling = tiling;
     }
 
+    /** What is switched off on the page being looked at. */
     public Set<String> excludedTiles() {
-        return excludedTiles;
+        return excludedTiles.computeIfAbsent(page, p -> new HashSet<>());
     }
 
     public void setExcludedTiles(Set<String> excluded) {
-        excludedTiles.clear();
-        excludedTiles.addAll(excluded);
+        Set<String> forPage = excludedTiles.computeIfAbsent(page, p -> new HashSet<>());
+        forPage.clear();
+        forPage.addAll(excluded);
     }
 
     // --- pages ------------------------------------------------------------------------------
@@ -230,7 +247,7 @@ public class ConversionJob {
         }
 
         for (Tile tile : tiling.tilesOf(src.getWidth(), src.getHeight())) {
-            if (excludedTiles.contains(tile.label())) {
+            if (excludedTiles().contains(tile.label())) {
                 continue;
             }
             TilePlan.PlannedTile planned = plan.at(page, tile.row(), tile.column());

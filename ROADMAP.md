@@ -59,9 +59,10 @@ Four things came out differently from how this section first described them:
 - **Clicking a cell first excluded it**, which made it impossible to look around a grid: one gesture
   cannot both show you a piece and throw it away. Clicking now selects, stepping through the pieces
   has its own control, and excluding is a button that says so.
-- **The window converts the page on screen**, not the whole document. Cells are switched off by
-  looking at them, so converting pages nobody has looked at would apply a judgement that was never
-  made. The command line is where a whole document goes through at once.
+- **The window converts the page on screen**, not the whole document, and a cell switched off is
+  switched off on that page alone. Both follow from the same thing: the choice is made by looking,
+  so it cannot be applied to pages nobody has looked at. The command line is where a whole document
+  goes through at once.
 
 PDFBox needed no addition to the hand-maintained `jlink` list, unlike the previous two releases. It
 costs four megabytes: the fat jar goes from 10 to 14, and the command-line jar from 1.5 to 5.1.
