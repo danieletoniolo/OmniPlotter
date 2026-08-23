@@ -172,15 +172,26 @@ class CliSnapshotTest {
     }
 
     @Test
-    void gridsSayHowLegibleEachWayOfCuttingAPageWouldBe() {
+    void gridsMeasureEachWayOfCuttingAPageAgainstAStatedTypeSize() {
         assertEquals(0, run("grids", "--target", "cg"));
 
         String table = stdout();
         assertTrue(table.contains("DPI"), table);
-        assertTrue(table.contains("TEXT LINE"), table);
-        // The point the command exists to make.
+        // The type size is named in the heading, because the pixel figure means nothing without it.
+        assertTrue(table.contains("10 PT TEXT"), table);
         assertTrue(table.contains("Resolution comes from columns"), table);
         assertTrue(table.contains("3x1"), table);
+    }
+
+    @Test
+    void aDifferentTypeSizeChangesTheAnswerAndNotTheGrids() {
+        assertEquals(0, run("grids", "--target", "cg", "--text-size", "18"));
+
+        String table = stdout();
+        assertTrue(table.contains("18 PT TEXT"), table);
+        // Same grids, same resolutions — larger type simply survives more of them.
+        assertTrue(table.contains("3x1"), table);
+        assertTrue(table.contains("12 px per line"), table);
     }
 
     @Test

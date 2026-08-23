@@ -22,8 +22,14 @@ import java.util.List;
  */
 public record TileGrid(int rows, int columns, int dpi, double lineHeight, double waste) {
 
-    /** A ten-point line is the ordinary size of body text, and the thing being judged. */
-    private static final double BODY_TEXT_POINTS = 10;
+    /**
+     * The type size the pixel figure is quoted for.
+     *
+     * <p>Quoted rather than assumed silently. Whether a grid works depends on the document as much
+     * as on the screen — a page of ten-point prose and a page of lecture notes at eighteen are not
+     * the same problem — so the figure is only meaningful next to the size it was worked out for.
+     */
+    public static final double REFERENCE_POINTS = 10;
 
     /** Past this the tile is the wrong shape for the screen badly enough not to be worth offering. */
     private static final double MAX_WASTE = 0.25;
@@ -37,14 +43,15 @@ public record TileGrid(int rows, int columns, int dpi, double lineHeight, double
     }
 
     /**
-     * Roughly what a reader needs.
+     * How tall a line of type this size ends up, in pixels.
      *
-     * <p>Not a threshold the code enforces — legibility is a judgement and screens differ — but the
-     * interface has to say something, and eleven pixels is about where a line of body text stops
-     * being a smudge.
+     * <p>Which is as far as this goes. Whether that is legible is not something a converter can
+     * decide: it depends on the typeface, on the screen, and on how much of the page is prose
+     * rather than diagrams. Reporting the number and letting the person reading it judge is the
+     * honest version; the previous verdict was wrong for anyone whose notes are not ten-point.
      */
-    public boolean isLegible() {
-        return lineHeight >= 11;
+    public double pixelsFor(double points) {
+        return dpi * points / 72;
     }
 
     /**
@@ -69,7 +76,7 @@ public record TileGrid(int rows, int columns, int dpi, double lineHeight, double
             }
 
             int dpi = (int) Math.round(canvasWidth * columns / page.widthInches());
-            grids.add(new TileGrid(rows, columns, dpi, dpi * BODY_TEXT_POINTS / 72, waste));
+            grids.add(new TileGrid(rows, columns, dpi, dpi * REFERENCE_POINTS / 72, waste));
         }
         return grids;
     }

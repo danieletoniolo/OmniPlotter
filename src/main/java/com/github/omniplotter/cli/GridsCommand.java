@@ -34,6 +34,11 @@ public class GridsCommand implements Callable<Integer> {
         description = "Page being cut up: a4, letter, a5, or millimetres as 210x297. Default a4.")
     private String page = "a4";
 
+    @Option(names = "--text-size", paramLabel = "POINTS",
+        description = "Type size to report the pixel height of. Default 10, which is ordinary body "
+            + "text; notes and slides are usually larger and so need fewer columns.")
+    private double textSize = TileGrid.REFERENCE_POINTS;
+
     @Override
     public Integer call() {
         Target target;
@@ -61,16 +66,22 @@ public class GridsCommand implements Callable<Integer> {
         System.out.println(size + " on " + target.getDisplayName()
             + " (" + format.id() + ", " + width + "x" + height + ")");
         System.out.println();
-        System.out.printf("%-8s %-7s %-6s %-11s %s%n", "GRID", "TILES", "DPI", "TEXT LINE", "");
+        System.out.printf("%-8s %-7s %-6s %s%n", "GRID", "TILES", "DPI",
+            trim(textSize) + " PT TEXT");
         for (TileGrid grid : TileGrid.candidatesFor(size, width, height)) {
-            System.out.printf("%-8s %-7d %-6d %-11s %s%n",
+            System.out.printf("%-8s %-7d %-6d %s%n",
                 grid, grid.count(), grid.dpi(),
-                String.format("%.1f px", grid.lineHeight()),
-                grid.isLegible() ? "readable" : "too small to read");
+                String.format("%.0f px per line", grid.pixelsFor(textSize)));
         }
         System.out.println();
         System.out.println("Resolution comes from columns: cutting a page across adds none.");
+        System.out.println("Whether a line that tall reads depends on the document; larger type");
+        System.out.println("needs fewer columns. Try --text-size for the type you actually have.");
         return 0;
+    }
+
+    private static String trim(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 
     private static Format defaultFormat(Target target) {

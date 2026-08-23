@@ -74,11 +74,17 @@ class TilingTest {
     @Test
     void aLineOfTextIsMeasuredSoTheChoiceCanBeMade() {
         List<TileGrid> grids = TileGrid.candidatesFor(PageSize.A4, 384, 192);
+        TileGrid oneColumn = grids.stream().filter(g -> g.columns() == 1).findFirst().orElseThrow();
+        TileGrid threeColumns = grids.stream().filter(g -> g.columns() == 3).findFirst().orElseThrow();
 
-        // One column: a ten-point line lands around six pixels, which is a smudge.
-        assertFalse(grids.stream().filter(g -> g.columns() == 1).findFirst().orElseThrow().isLegible());
-        // Three: around nineteen, which is a line of text.
-        assertTrue(grids.stream().filter(g -> g.columns() == 3).findFirst().orElseThrow().isLegible());
+        // Reported, not judged: the same grid that loses ten-point prose carries eighteen-point
+        // notes perfectly well, and which of those someone has is not a converter's business.
+        assertEquals(6.4, oneColumn.pixelsFor(10), 0.1);
+        assertEquals(11.6, oneColumn.pixelsFor(18), 0.1);
+        assertEquals(19.3, threeColumns.pixelsFor(10), 0.1);
+
+        // The quoted figure is the one for the size it says it is for.
+        assertEquals(oneColumn.lineHeight(), oneColumn.pixelsFor(TileGrid.REFERENCE_POINTS), 0.001);
     }
 
     @Test

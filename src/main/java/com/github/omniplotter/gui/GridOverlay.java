@@ -46,19 +46,17 @@ public class GridOverlay extends Pane {
         getStyleClass().add("grid-overlay");
         setCursor(Cursor.HAND);
 
+        // Clicking picks a cell to look at. Excluding it is a separate thing to say, because one
+        // gesture that both shows you a tile and throws it away is a gesture you cannot use to
+        // look around.
         setOnMouseClicked(e -> {
             Tile tile = tileAt(e.getX(), e.getY());
             if (tile == null) {
                 return;
             }
-            String label = tile.label();
-            if (!excluded.remove(label)) {
-                excluded.add(label);
-            }
-            focused = label;
+            focused = tile.label();
             rebuild();
             onTileClicked.accept(tile);
-            onChange.run();
             e.consume();
         });
     }
@@ -103,6 +101,24 @@ public class GridOverlay extends Pane {
 
     public Set<String> excluded() {
         return Set.copyOf(excluded);
+    }
+
+    /** Which cell is being looked at, so the preview and the outline agree. */
+    public void setFocused(Tile tile) {
+        this.focused = tile == null ? null : tile.label();
+        rebuild();
+    }
+
+    /** Switches one cell off, or back on. The only way a cell leaves the conversion. */
+    public void toggleExcluded(Tile tile) {
+        if (tile == null) {
+            return;
+        }
+        if (!excluded.remove(tile.label())) {
+            excluded.add(tile.label());
+        }
+        rebuild();
+        onChange.run();
     }
 
     /** Puts back what this image had switched off, without treating it as a fresh decision. */

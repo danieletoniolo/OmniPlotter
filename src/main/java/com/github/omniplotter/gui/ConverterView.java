@@ -129,6 +129,12 @@ public class ConverterView extends StackPane {
 
     private final ComboBox<TileGrid> gridBox = new ComboBox<>();
     private final Label tileCount = new Label();
+    private final Label tileLabel = new Label();
+    private final Button previousTile = new Button("\u2039");
+    private final Button nextTile = new Button("\u203a");
+    private final Button excludeTile = new Button("Exclude this tile");
+    private final Button includeAll = new Button("Include all");
+    private VBox tileControls;
     private final Label pageLabel = new Label();
     private final Button previousPage = new Button("\u2039");
     private final Button nextPage = new Button("\u203a");
@@ -574,19 +580,40 @@ public class ConverterView extends StackPane {
         cropRow.setAlignment(Pos.CENTER_LEFT);
 
         gridBox.setMaxWidth(Double.MAX_VALUE);
+        // The resolution is a property of the grid; how tall a line of type ends up is only
+        // meaningful next to the size it was worked out for, so the label says which size that is
+        // rather than pronouncing on whether the result is readable.
         gridBox.setConverter(labeller(grid -> grid == null ? "Whole page, one file"
-            : grid + "  —  " + grid.count() + " tiles, "
-                + String.format("%.0f", grid.lineHeight()) + " px lines"
-                + (grid.isLegible() ? "" : ", too small to read")));
+            : grid + "  —  " + grid.count() + " tiles, " + grid.dpi() + " dpi ("
+                + String.format("%.0f", TileGrid.REFERENCE_POINTS) + " pt \u2248 "
+                + String.format("%.0f", grid.lineHeight()) + " px)"));
         gridBox.valueProperty().addListener((o, was, now) -> gridSelected(now));
 
-        Button includeAll = new Button("Include all");
+        // Stepping through the pieces, because seeing one of twelve and having to guess at the
+        // rest is most of the way to not being able to judge the grid at all.
+        previousTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        nextTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        previousTile.setOnAction(e -> stepTile(-1));
+        nextTile.setOnAction(e -> stepTile(1));
+        tileLabel.getStyleClass().add(Styles.TEXT_MUTED);
+        HBox tileNav = new HBox(8, previousTile, tileLabel, nextTile);
+        tileNav.setAlignment(Pos.CENTER_LEFT);
+
+        excludeTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        excludeTile.setOnAction(e -> {
+            gridOverlay.toggleExcluded(focusedTile);
+            updateTileCount();
+        });
         includeAll.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
-        includeAll.setOnAction(e -> gridOverlay.includeEverything());
+        includeAll.setOnAction(e -> {
+            gridOverlay.includeEverything();
+            updateTileCount();
+        });
+        HBox tileButtons = new HBox(8, excludeTile, includeAll);
+        tileButtons.setAlignment(Pos.CENTER_LEFT);
 
         tileCount.getStyleClass().add(Styles.TEXT_MUTED);
-        HBox tileRow = new HBox(8, tileCount, includeAll);
-        tileRow.setAlignment(Pos.CENTER_LEFT);
+        tileControls = new VBox(8, tileNav, tileButtons, tileCount);
 
         previousPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
         nextPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
@@ -608,7 +635,7 @@ public class ConverterView extends StackPane {
             cropRow,
             new Separator(),
             field("Cut the page into", gridBox),
-            tileRow,
+            tileControls,
             pageRow);
 
         return new VBox(10, header, body);
@@ -724,11 +751,15 @@ public class ConverterView extends StackPane {
 
         gridOverlay.setTiling(tiling);
         gridOverlay.setActive(grid != null);
-        focusedTile = null;
+
+        // The job has to know the grid before anyone asks it what the pieces are, and the
+        // resolution has to be set before the page is rendered to answer that.
         if (job != null) {
             job.setTiling(tiling);
             applyRenderDpi(job, tiling);
         }
+
+        focusPiece(0);
         updateTileCount();
         if (!updating) {
             showSelection();
@@ -753,6 +784,7 @@ public class ConverterView extends StackPane {
 
     private void tileClicked(Tile tile) {
         focusedTile = tile;
+        updateTileCount();
         schedulePreview();
     }
 
@@ -765,19 +797,82 @@ public class ConverterView extends StackPane {
         schedulePreview();
     }
 
+    /**
+     * Everything about the pieces, shown only when there are pieces.
+     *
+     * <p>The whole block hides with the grid. A button offering to put back cells nobody has taken
+     * out, sitting under a setting that is switched off, is a question rather than a control.
+     */
     private void updateTileCount() {
         Tiling tiling = gridOverlay.tiling();
-        if (tiling.isWhole()) {
-            tileCount.setText("");
-            tileCount.setVisible(false);
-            tileCount.setManaged(false);
+        boolean gridded = !tiling.isWhole();
+        tileControls.setVisible(gridded);
+        tileControls.setManaged(gridded);
+        if (!gridded) {
             return;
         }
-        tileCount.setVisible(true);
-        tileCount.setManaged(true);
+
+        List<Tile> tiles = currentTiles();
+        int position = indexOfFocused(tiles);
+        tileLabel.setText(focusedTile == null || position < 0
+            ? "Click a cell to look at it"
+            : "Tile " + (position + 1) + " of " + tiles.size() + "  (" + focusedTile.label() + ")");
+        previousTile.setDisable(tiles.isEmpty() || position <= 0);
+        nextTile.setDisable(tiles.isEmpty() || position < 0 || position >= tiles.size() - 1);
+
+        boolean out = focusedTile != null && gridOverlay.excluded().contains(focusedTile.label());
+        excludeTile.setDisable(focusedTile == null);
+        excludeTile.setText(out ? "Put this tile back" : "Exclude this tile");
+
         int included = gridOverlay.includedCount();
-        tileCount.setText(included + " of " + tiling.count() + " tiles"
-            + (included == tiling.count() ? "" : " — click a cell to put it back"));
+        boolean anyExcluded = included != tiling.count();
+        includeAll.setVisible(anyExcluded);
+        includeAll.setManaged(anyExcluded);
+        tileCount.setText(included + " of " + tiling.count() + " tiles will be converted");
+    }
+
+    /** The pieces of the page now on screen, in reading order. */
+    private List<Tile> currentTiles() {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        if (job == null || job.tiling().isWhole()) {
+            return List.of();
+        }
+        BufferedImage src = job.source();
+        if (src == null || !job.tiling().fits(src.getWidth(), src.getHeight())) {
+            return List.of();
+        }
+        return job.tiling().tilesOf(src.getWidth(), src.getHeight());
+    }
+
+    private int indexOfFocused(List<Tile> tiles) {
+        if (focusedTile == null) {
+            return -1;
+        }
+        for (int i = 0; i < tiles.size(); i++) {
+            if (tiles.get(i).label().equals(focusedTile.label())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Puts the eye on one of the pieces, so a new grid has something to show without hunting. */
+    private void focusPiece(int index) {
+        List<Tile> tiles = currentTiles();
+        focusedTile = tiles.isEmpty() ? null : tiles.get(Math.min(index, tiles.size() - 1));
+        gridOverlay.setFocused(focusedTile);
+    }
+
+    private void stepTile(int by) {
+        List<Tile> tiles = currentTiles();
+        if (tiles.isEmpty()) {
+            return;
+        }
+        int next = Math.max(0, Math.min(tiles.size() - 1, indexOfFocused(tiles) + by));
+        focusedTile = tiles.get(next);
+        gridOverlay.setFocused(focusedTile);
+        updateTileCount();
+        schedulePreview();
     }
 
     private void turnPage(int by) {
@@ -1112,6 +1207,12 @@ public class ConverterView extends StackPane {
             gridOverlay.setTiling(job.tiling());
             gridOverlay.setExcluded(job.excludedTiles());
             gridOverlay.setActive(!job.tiling().isWhole());
+            if (!job.tiling().isWhole() && focusedTile == null) {
+                focusPiece(0);
+            } else {
+                gridOverlay.setFocused(focusedTile);
+            }
+            updateTileCount();
         }
         schedulePreview();
     }
