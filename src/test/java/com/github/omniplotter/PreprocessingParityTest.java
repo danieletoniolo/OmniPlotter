@@ -61,6 +61,7 @@ class PreprocessingParityTest {
 
     private static Path magick;
     private static Path work;
+    private static boolean transparencyWorks;
     private static final List<String> REPORT = new ArrayList<>();
 
     @BeforeAll
@@ -73,6 +74,34 @@ class PreprocessingParityTest {
         }
         if (magick != null) {
             work = Files.createTempDirectory("omniplotter-parity");
+            transparencyWorks = transparencyWorks();
+        }
+    }
+
+    /**
+     * Whether this ImageMagick can still make a colour transparent.
+     *
+     * <p>7.1.2-30 cannot: {@code -transparent white} over an all-white image returns it fully
+     * opaque, with an alpha channel present and every pixel set. The formats that carry their ink
+     * in alpha then look as though this port had put the ink somewhere else, when what actually
+     * happened is that the thing being compared against stopped doing the operation.
+     *
+     * <p>Checked rather than assumed, and checked on the simplest case there is, so that the
+     * failure it guards against cannot be mistaken for a subtle one. When a fixed build arrives the
+     * check passes again and the comparison resumes with nobody having to remember it exists.
+     */
+    private static boolean transparencyWorks() {
+        try {
+            Path probe = work.resolve("transparency-probe.png");
+            Process process = new ProcessBuilder(magick.toString(), "-size", "8x8", "xc:white",
+                "-transparent", "white", probe.toString()).redirectErrorStream(true).start();
+            if (!process.waitFor(30, TimeUnit.SECONDS) || process.exitValue() != 0) {
+                return false;
+            }
+            BufferedImage result = ImageIO.read(probe.toFile());
+            return result != null && ((result.getRGB(0, 0) >>> 24) & 0xFF) == 0;
+        } catch (IOException | InterruptedException e) {
+            return false;
         }
     }
 
@@ -101,8 +130,19 @@ class PreprocessingParityTest {
         return tests;
     }
 
+    /** The ones whose ink ends up in the alpha channel, and so need a working {@code -transparent}. */
+    private static boolean needsTransparency(Format format) {
+        return switch (format) {
+            case TI_8XI, TI_83I, TI_73I, TI_82I, TI_85I, TI_86I -> true;
+            default -> false;
+        };
+    }
+
     private void check(Format format) throws Exception {
         Assumptions.assumeTrue(magick != null, "ImageMagick not installed; skipping parity check");
+        Assumptions.assumeTrue(transparencyWorks || !needsTransparency(format),
+            "this ImageMagick cannot make a colour transparent, so it cannot say where the ink of "
+                + format.id() + " belongs; skipping rather than reporting a difference it invented");
 
         FormatConfig config = FormatConfig.of(format);
         BufferedImage source = photoLike(640, 400);
