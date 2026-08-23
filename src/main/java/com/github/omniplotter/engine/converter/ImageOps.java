@@ -19,6 +19,7 @@
  */
 package com.github.omniplotter.engine.converter;
 
+import com.github.omniplotter.engine.data.Adjustments;
 import com.github.omniplotter.engine.util.Palette;
 
 import java.awt.Color;
@@ -723,6 +724,140 @@ public final class ImageOps {
                 default -> (argb >>> 24) & 0xFF;
             };
         }
+    }
+
+    // --- controls of our own ---------------------------------------------------------------
+    //
+    // Everything above reproduces an ImageMagick operator the reference invokes. Nothing below is
+    // in the reference at all: these exist to be asked for explicitly, and every one of them is
+    // skipped when its settings are neutral, so the default path stays exactly the path above.
+
+    /**
+     * Brightness, contrast, gamma and saturation in a single pass.
+     *
+     * <p>One pass, not four, so the intermediate values are never rounded back to eight bits
+     * between steps — four adjustments each losing half a level is a visible difference on a
+     * sixteen-colour palette.
+     *
+     * <p>Alpha is not touched. Transparency is structure rather than tone, and the formats that
+     * carry ink in the alpha channel would read any change to it as a change to the picture.
+     */
+    public static BufferedImage adjust(BufferedImage src, Adjustments adjustments) {
+        if (adjustments.isNeutral()) {
+            return src;
+        }
+
+        float offset = adjustments.brightness() * 255f / 100f;
+        // The usual contrast curve, pivoting on mid-grey. Written over -255..255 because that is
+        // the range the constants are for; the setting itself is a percentage.
+        float c = adjustments.contrast() * 255f / 100f;
+        float slope = (259f * (c + 255f)) / (255f * (259f - c));
+        float exponent = 1f / (float) adjustments.gamma();
+        float saturation = 1f + adjustments.saturation() / 100f;
+
+        return map(src, false, channels -> {
+            float[] v = {channels[0], channels[1], channels[2]};
+
+            for (int i = 0; i < 3; i++) {
+                v[i] = slope * (v[i] + offset - 128f) + 128f;
+                v[i] = 255f * (float) Math.pow(clamp01(v[i] / 255f), exponent);
+            }
+
+            if (saturation != 1f) {
+                // The same luma weights grayscale() uses, so full desaturation here and a
+                // -colorspace Gray in the reference pipeline agree about what grey means.
+                float luma = 0.212656f * v[0] + 0.715158f * v[1] + 0.072186f * v[2];
+                for (int i = 0; i < 3; i++) {
+                    v[i] = luma + (v[i] - luma) * saturation;
+                }
+            }
+
+            return new int[]{Math.round(v[0]), Math.round(v[1]), Math.round(v[2]), channels[3]};
+        });
+    }
+
+    /**
+     * An unsharp mask: the image plus what a blur of it left out.
+     *
+     * <p>Applied after resizing rather than before, because it is the resampling that costs the
+     * edges. Sharpening a large source and then throwing four fifths of its pixels away sharpens
+     * mostly the pixels that get discarded.
+     *
+     * <p>Hand-rolled rather than {@link java.awt.image.ConvolveOp}, whose edge handling is a choice
+     * between a black frame and an undersized result. Here the sampling clamps to the edge, so a
+     * border pixel is sharpened against its neighbours rather than against nothing.
+     */
+    public static BufferedImage sharpen(BufferedImage src, double amount) {
+        if (amount <= 0) {
+            return src;
+        }
+        int w = src.getWidth();
+        int h = src.getHeight();
+
+        int[] pixels = src.getRGB(0, 0, w, h, null, 0, w);
+        float[][] channels = new float[3][w * h];
+        for (int i = 0; i < pixels.length; i++) {
+            channels[0][i] = (pixels[i] >> 16) & 0xFF;
+            channels[1][i] = (pixels[i] >> 8) & 0xFF;
+            channels[2][i] = pixels[i] & 0xFF;
+        }
+
+        float[][] blurred = new float[3][];
+        for (int c = 0; c < 3; c++) {
+            blurred[c] = blur(channels[c], w, h);
+        }
+
+        int[] out = new int[w * h];
+        for (int i = 0; i < out.length; i++) {
+            int r = clampByte(Math.round(channels[0][i] + (float) amount * (channels[0][i] - blurred[0][i])));
+            int g = clampByte(Math.round(channels[1][i] + (float) amount * (channels[1][i] - blurred[1][i])));
+            int b = clampByte(Math.round(channels[2][i] + (float) amount * (channels[2][i] - blurred[2][i])));
+            out[i] = (pixels[i] & 0xFF000000) | (r << 16) | (g << 8) | b;
+        }
+
+        BufferedImage result = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        result.setRGB(0, 0, w, h, out, 0, w);
+        return result;
+    }
+
+    /** A five-tap Gaussian, separable, sampling clamped at the edges. */
+    private static float[] blur(float[] plane, int w, int h) {
+        float[] kernel = {0.06136f, 0.24477f, 0.38774f, 0.24477f, 0.06136f};
+        float[] horizontal = new float[w * h];
+        float[] out = new float[w * h];
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                float sum = 0;
+                for (int k = -2; k <= 2; k++) {
+                    sum += kernel[k + 2] * plane[y * w + Math.max(0, Math.min(w - 1, x + k))];
+                }
+                horizontal[y * w + x] = sum;
+            }
+        }
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                float sum = 0;
+                for (int k = -2; k <= 2; k++) {
+                    sum += kernel[k + 2] * horizontal[Math.max(0, Math.min(h - 1, y + k)) * w + x];
+                }
+                out[y * w + x] = sum;
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A rectangle of the image, copied out.
+     *
+     * <p>Copied rather than returned as a {@code getSubimage} view: that shares its raster with the
+     * original, and the window keeps one decoded source per queued image and re-previews from it
+     * every time a setting moves.
+     */
+    public static BufferedImage crop(BufferedImage src, int x, int y, int w, int h) {
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        out.setRGB(0, 0, w, h, src.getRGB(x, y, w, h, null, 0, w), 0, w);
+        return out;
     }
 
     private static float clamp01(float v) {

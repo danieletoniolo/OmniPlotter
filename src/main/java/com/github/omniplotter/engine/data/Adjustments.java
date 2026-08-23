@@ -13,7 +13,8 @@ package com.github.omniplotter.engine.data;
  *
  * @param brightness -100 to 100, 0 leaves the image alone
  * @param contrast   -100 to 100, 0 leaves the image alone
- * @param gamma      0.1 to 5.0, 1.0 leaves the image alone. Below 1 lightens the midtones
+ * @param gamma      0.1 to 5.0, 1.0 leaves the image alone. Above 1 lightens the midtones, which
+ *                   is ImageMagick's convention for {@code -gamma} and so the one this follows
  * @param saturation -100 to 100, 0 leaves the image alone; -100 is grey
  * @param sharpen    0 to 5, the strength of an unsharp mask; 0 is off
  */
