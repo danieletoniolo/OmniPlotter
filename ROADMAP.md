@@ -7,126 +7,37 @@ One rule orders everything below: nothing ships that would disappoint on first u
 instinct as the golden vectors — a file the calculator refuses is worse than no file, and a feature
 whose output cannot be read is worse than a missing feature.
 
-## 1.0 — the first release
+## Shipped
 
-The engine is done and checked against the reference. What is missing is everything around it: the
-parts that make this an installed application rather than a working build.
+### 1.0 — the first release
 
-### Update notifications
+Update notifications, `omniplotter setup` and `doctor`, persistent settings, WebP and TIFF input
+with EXIF orientation honoured, a log file the window can open, release plumbing and a snapshot test
+for the CLI.
 
-A daily check against `https://api.github.com/repos/danieletoniolo/OmniPlotter/releases/latest`,
-compared with the version the jar manifest records. When a newer one exists, the window shows a
-dismissable banner and `omniplotter update` prints the same thing.
+Two things were built differently from how this file first described them, and the reasons are
+worth keeping:
 
-It notifies; it does not update itself. See [Decided against](#decided-against) for why, and why
-that is not going to change.
+- The update check reads the tag out of the `Location` header of `/releases/latest` instead of
+  parsing the JSON API. No dependency, no rate limit, and so none of the `ETag` machinery that was
+  planned around the sixty-requests-an-hour budget.
+- HEIC is not supported and will not be until a pure-Java decoder exists. It is named explicitly in
+  the error rather than reported as an unreadable file.
 
-Three constraints shape the implementation:
+Three things only the packaged application could reveal: `jlink` needs `java.net.http` *and*
+`jdk.crypto.ec` or the check fails its TLS handshake; both NTFS and the macOS filesystem are
+case-insensitive, so the console launcher cannot be called `omniplotter` beside `OmniPlotter`; and
+`jpackage` accepts one to three integers as a version, with a first number of at least one.
 
-- Unauthenticated GitHub API calls are limited to 60 per hour per IP. One check per day, with the
-  `ETag` from the previous response, stays far inside that and costs nothing when nothing changed.
-- The check needs somewhere to keep that state, which is why persistent settings below are a
-  prerequisite rather than a nicety.
-- `Implementation-Version` is absent in a development build — [Cli.java](src/main/java/com/github/omniplotter/cli/Cli.java)
-  already relies on this to print `(development build)`. The same signal switches the check off
-  entirely, so working on the app never phones home.
-- When the app was installed by a package manager, the notifier stays quiet and lets that package
-  manager do its job. Installing through Homebrew and then being told by the app to go download a
-  `.dmg` is the wrong answer twice.
+### 1.1 — legibility
 
-### Terminal command setup
+Dithering exposed as a three-way choice defaulting to what the reference does per format;
+brightness, contrast, gamma, saturation and sharpening, with `photo` and `document` presets over
+them; and filling and cropping, the crop drawn on the source preview and kept per image.
 
-`omniplotter setup` puts the CLI on the user's `PATH`, and a button in the window does the same for
-the people who installed a `.dmg` and would never discover from the interface that a CLI exists.
-
-The installed launcher already is the CLI — [Main.java](src/main/java/com/github/omniplotter/Main.java)
-reads arguments as the command line and their absence as the window — so this is only about making
-the binary reachable under a sensible name. Per platform:
-
-- **Windows** is the real work. The launcher jpackage produces is a GUI-subsystem executable, so
-  `OmniPlotter.exe convert ...` in a console prints nothing at all. The fix is not `--win-console`,
-  which would flash a console window every time someone opens the app normally, but a second
-  launcher: `--add-launcher omniplotter=cli.properties` with `win-console=true`. That also gets the
-  lower-case name a command line wants.
-- **macOS and Linux** get a symlink in `~/.local/bin`, never `/usr/local/bin`, which would need
-  `sudo`. If that directory is not on `PATH`, the command prints the exact line it proposes to add
-  to the shell's startup file and asks first. Editing someone's shell configuration silently is not
-  acceptable, however convenient.
-
-While in there: shell completions, which picocli generates through `AutoComplete`, an `--uninstall`
-that reverses all of it, and an `omniplotter doctor` that prints where every piece actually is.
-
-### Persistent settings
-
-Today the theme resets on every launch and so does the output directory. A single file in the
-platform's configuration directory holds the theme, the last format, target and canvas, the output
-directory, the window geometry and the update preference.
-
-Small, and needed by the updater anyway.
-
-### Input formats and orientation
-
-[EngineApi](src/main/java/com/github/omniplotter/engine/EngineApi.java) decodes through `ImageIO`,
-which does not read HEIC — the default for photographs taken on an iPhone — or WebP. The current
-result is `Not a readable image`, on what is probably the most common first thing anyone tries.
-
-The floor is an honest error that says which formats do work. The right fix is the TwelveMonkeys
-ImageIO plugins for WebP and TIFF, plus honouring the EXIF orientation tag so photographs from a
-phone do not arrive sideways.
-
-### Logs, and a way to report a bug
-
-A log file in the platform's log directory, an "Open log folder" item in the window, and issue
-templates that ask for `omniplotter --version` and the image that failed. Cheap, and the difference
-between a first release that produces usable reports and one that produces "it doesn't work".
-
-### Release plumbing
-
-Two of these have to be right in the first tag, because they cannot be fixed retroactively:
-
-- `--win-upgrade-uuid`, with a fixed GUID. Without it every future `.msi` installs beside its
-  predecessor instead of replacing it.
-- A stable `--mac-package-identifier`.
-
-And, because the builds are unsigned:
-
-- `SHA256SUMS` generated in the publish job and attached to the release. It is the free and honest
-  substitute for a signature.
-- The fat jar published as a release asset. It is already built, and it is the way out for anyone
-  who has a JDK 21, wants only the CLI, or is packaging this for a distribution.
-- Accurate Gatekeeper instructions. On recent macOS versions the right-click → Open route no longer
-  reliably appears for unsigned applications; the dependable path is to let the first launch be
-  blocked and then use System Settings → Privacy & Security → "Open Anyway", with
-  `xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` as the terminal alternative. The
-  README currently describes only the old route.
-
-### One test for the CLI
-
-There is none. The CLI is the public contract for everyone arriving from an img2calc URL, and a
-snapshot test of its output is cheap insurance before anything below starts moving code around.
-
-## 1.1 — legibility
-
-The engine reproduces the reference exactly, including the parts of the reference that were tuned
-for photographs. Text on a sixteen-colour screen wants the opposite treatment, and there is
-currently no way to ask for it.
-
-- **Dithering, exposed.** It already flows through the pipeline as a per-format boolean in
-  [ImagePreprocessor](src/main/java/com/github/omniplotter/engine/converter/ImagePreprocessor.java);
-  the work is threading an option through, not new image processing. On sixteen colours it is the
-  difference between a legible picture and mush.
-- **Brightness, contrast, gamma, saturation, unsharp** before quantisation, with *photo* and
-  *document* presets over the top, since almost nobody wants to discover the right five numbers by
-  hand.
-- **Crop, and a fill mode.** A source whose aspect ratio does not match the canvas is currently
-  letterboxed onto opaque white. Cover-and-centre-crop, plus a draggable crop rectangle on the
-  preview, is the largest single improvement to the result for photographs.
-
-Every new control defaults to what the reference does. `PreprocessingParityTest` stops meaning
-anything the moment the default path stops being the reference path.
-
-Crop lands here rather than later for a structural reason: it is the one-rectangle case of the
-geometry stage that 1.2 needs N of.
+Every default is still the reference's behaviour, which is what keeps `PreprocessingParityTest`
+meaningful. Filling decides proportions only — reaching the canvas is still `--enlarge-smaller`'s
+job, as it was before.
 
 ## 1.2 — PDF input and tiling
 

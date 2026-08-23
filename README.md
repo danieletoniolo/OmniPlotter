@@ -44,6 +44,21 @@ omniplotter targets --mode var
 omniplotter inspect PICT1.g3p
 ```
 
+A photograph and a screenshot of text want opposite treatment, and the conversion is tuned for the
+first. `--look document` turns dithering off and hardens the contrast, which is the difference
+between legible small text and mush on a sixteen-colour screen. `--fill` crops the source to the
+canvas proportions instead of padding it out with white.
+
+```bash
+omniplotter convert notes.png -f cp.g3p --look document
+omniplotter convert portrait.jpg -f 8ca --fill --enlarge-smaller
+```
+
+Each control is also available on its own — `--dither`, `--brightness`, `--contrast`, `--gamma`,
+`--saturation`, `--sharpen`, `--crop x,y,w,h` — and anything given alongside a `--look` overrides
+it. Every one of them defaults to what img2calc does, so a command without them converts exactly as
+before.
+
 Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
 tool translates directly into a command here.
 
