@@ -121,6 +121,28 @@ public class ConverterView extends StackPane {
     private final CheckBox fill = new CheckBox("Fill the canvas");
     private final ToggleButton cropToggle = new ToggleButton("Crop");
     private CropOverlay cropOverlay;
+    /**
+     * The job the overlay is currently drawing on.
+     *
+     * <p>Held rather than read from the selection when the rectangle changes: the callback arrives
+     * on mouse release, and reading the selection at that moment is a promise that it has not moved
+     * since the drag began.
+     */
+    private ConversionJob croppingJob;
+
+    /**
+     * The image the crop tool was switched on for.
+     *
+     * <p>The tool follows this one image rather than the selection or the presence of a rectangle.
+     * Following the selection makes it turn up on images nobody asked to crop; following the
+     * rectangle makes it turn itself on again every time a finished crop is revisited. Following
+     * the image it was opened on means coming back to what you were doing finds it as you left it,
+     * and nothing else does.
+     */
+    private ConversionJob armedFor;
+
+    /** True while the toggle is being set to match the selection rather than by the user. */
+    private boolean restoringCropTool;
 
     private final TextField onCalcName = new TextField();
     private final Spinner<Integer> onCalcNumber = new Spinner<>(0, 9, 1);
@@ -512,6 +534,9 @@ public class ConverterView extends StackPane {
         cropToggle.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
         cropToggle.setTooltip(new Tooltip("Draw the part of the image to convert, on the source"));
         cropToggle.selectedProperty().addListener((o, was, now) -> {
+            if (!restoringCropTool) {
+                armedFor = now ? croppingJob : null;
+            }
             updateCropAspect();
             cropOverlay.setActive(now);
         });
@@ -615,9 +640,8 @@ public class ConverterView extends StackPane {
 
     /** The crop belongs to the image, not to the settings: each queued file keeps its own. */
     private void cropChanged() {
-        ConversionJob job = queue.getSelectionModel().getSelectedItem();
-        if (job != null) {
-            job.setCrop(cropOverlay.crop());
+        if (croppingJob != null) {
+            croppingJob.setCrop(cropOverlay.crop());
         }
         schedulePreview();
     }
@@ -845,7 +869,13 @@ public class ConverterView extends StackPane {
 
     private void showSelection() {
         ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        croppingJob = job;
+
         if (job == null) {
+            // Nothing selected, so there is nothing to draw a rectangle on — including when the
+            // image being cropped is the one that was just deleted.
+            cropOverlay.setImage(0, 0, null);
+            restoreCropTool(null);
             Animations.swap(sourceView, null);
             Animations.swap(previewView, null);
             sourceCaption.setText("No image selected");
@@ -856,15 +886,34 @@ public class ConverterView extends StackPane {
         if (src == null) {
             Animations.swap(sourceView, null);
             cropOverlay.setImage(0, 0, null);
+            restoreCropTool(null);
             sourceCaption.setText("Could not read this file: " + job.error());
         } else {
             Animations.swap(sourceView, SwingFXUtils.toFXImage(src, null));
             sourceCaption.setText(job.name() + " — " + src.getWidth() + " × " + src.getHeight());
-            // Whatever was drawn on this image last time, back where it was.
+            // Whatever was drawn on this image last time, back where it was. The rectangle shows
+            // on any cropped image, so one says so without being asked; the tool itself comes back
+            // only on the image it was switched on for.
             cropOverlay.setImage(src.getWidth(), src.getHeight(), job.crop());
-            cropToggle.setSelected(job.crop() != null);
+            restoreCropTool(job);
         }
         schedulePreview();
+    }
+
+    /**
+     * Puts the crop tool back the way this image left it.
+     *
+     * <p>Marked as a restore rather than a choice, so the listener does not read it as the user
+     * switching the tool off for the image they are leaving — which would forget the very thing
+     * being remembered.
+     */
+    private void restoreCropTool(ConversionJob job) {
+        if (armedFor != null && !jobs.contains(armedFor)) {
+            armedFor = null;
+        }
+        restoringCropTool = true;
+        cropToggle.setSelected(job != null && job == armedFor);
+        restoringCropTool = false;
     }
 
     /**

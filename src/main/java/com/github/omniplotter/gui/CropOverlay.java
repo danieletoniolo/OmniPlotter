@@ -43,6 +43,15 @@ public class CropOverlay extends Pane {
     /** Width over height the rectangle is locked to, or zero when it is free. */
     private double aspect;
 
+    /**
+     * Whether the rectangle can be edited, as opposed to merely seen.
+     *
+     * <p>The two are separate. A cropped image shows what is being discarded whichever image is
+     * selected, because otherwise the crop is invisible and the preview looks wrong for no stated
+     * reason. Editing is a tool the user switches on, and never switches itself on.
+     */
+    private boolean editing;
+
     private Grab grab = Grab.NONE;
     private double grabX;
     private double grabY;
@@ -51,7 +60,6 @@ public class CropOverlay extends Pane {
     public CropOverlay(ImageView view) {
         this.view = view;
         setMouseTransparent(true);
-        setVisible(false);
         getStyleClass().add("crop-overlay");
 
         for (Rectangle band : shade) {
@@ -103,19 +111,23 @@ public class CropOverlay extends Pane {
         this.onChange = onChange;
     }
 
-    /** Switches editing on. While off the pane is invisible and lets every event through. */
+    /**
+     * Switches editing on. While off the pane is invisible and lets every event through.
+     *
+     * <p>Switching on draws nothing. It used to start with a rectangle around the whole image,
+     * which looked harmless — a rectangle containing everything crops nothing, so the preview did
+     * not move — but it left the image carrying a crop it had never been given. Since having a crop
+     * is what makes this tool re-arm when that image comes back, merely opening the tool once was
+     * enough to make it follow you around the queue.
+     */
     public void setActive(boolean active) {
-        setVisible(active);
+        this.editing = active;
         setMouseTransparent(!active);
-        if (active && crop == null && imageWidth > 0) {
-            crop = defaultRectangle();
-            onChange.run();
-        }
         redraw();
     }
 
     public boolean isActive() {
-        return isVisible();
+        return editing;
     }
 
     /** The image now being shown, in its own pixels. Resets a rectangle that cannot apply to it. */
@@ -234,11 +246,6 @@ public class CropOverlay extends Pane {
         return new Crop(left, top, Math.min(width, imageWidth - left), Math.min(height, imageHeight - top));
     }
 
-    /** The largest rectangle the current lock allows, which is the whole image when it is free. */
-    private Crop defaultRectangle() {
-        return constrain(new Crop(0, 0, imageWidth, imageHeight));
-    }
-
     private static Cursor cursorFor(Grab grab) {
         return switch (grab) {
             case NW -> Cursor.NW_RESIZE;
@@ -344,13 +351,15 @@ public class CropOverlay extends Pane {
     }
 
     private void redraw() {
-        boolean drawable = isVisible() && crop != null && imageWidth > 0 && getWidth() > 0;
+        boolean drawable = crop != null && imageWidth > 0 && getWidth() > 0;
         for (Rectangle band : shade) {
             band.setVisible(drawable);
         }
         border.setVisible(drawable);
+        // Handles only while editing: they are the part that invites a drag, and inviting one when
+        // the tool is off would promise something the pane will not accept.
         for (Rectangle handle : handles) {
-            handle.setVisible(drawable);
+            handle.setVisible(drawable && editing);
         }
         if (!drawable) {
             return;
