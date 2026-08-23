@@ -20,12 +20,19 @@ public enum Look {
     /**
      * Text, screenshots, diagrams, sheet music.
      *
-     * <p>The opposite treatment: contrast hard enough to separate ink from paper before the colour
+     * <p>The opposite treatment: contrast enough to separate ink from paper before the colour
      * budget is spent, colour pulled back because compression noise in a scan is coloured and the
      * content is not, and no dithering — on strokes it scatters into noise exactly where the eye
      * needs an edge.
+     *
+     * <p>The gamma is below one, which is the move that decides whether this works. A letterform
+     * at eleven points survives downscaling as a few solid pixels and a lot of half-grey edge;
+     * lightening the midtones thins that edge away to nothing and the stroke breaks up, while
+     * darkening it keeps the letter joined. Sharpening is kept mild for the same reason — without
+     * dithering to absorb it, the overshoot snaps straight to white and punches holes in thin
+     * strokes. Both of these were tuned by converting a page of type and looking at it.
      */
-    DOCUMENT("document", new Adjustments(0, 45, 1.1, -25, 1.6), Dither.OFF);
+    DOCUMENT("document", new Adjustments(0, 30, 0.80, -25, 0.5), Dither.OFF);
 
     private final String id;
     private final Adjustments adjustments;
