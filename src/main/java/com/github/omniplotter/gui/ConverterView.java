@@ -7,9 +7,14 @@ import com.github.omniplotter.app.CommandSetup;
 import com.github.omniplotter.app.Desktops;
 import com.github.omniplotter.app.Settings;
 import com.github.omniplotter.app.UpdateCheck;
+import com.github.omniplotter.engine.data.Adjustments;
 import com.github.omniplotter.engine.data.ConversionOptions;
+import com.github.omniplotter.engine.data.Crop;
+import com.github.omniplotter.engine.data.Dither;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
+import com.github.omniplotter.engine.data.Framing;
+import com.github.omniplotter.engine.data.Look;
 import com.github.omniplotter.engine.data.Mode;
 import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
@@ -33,6 +38,8 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Slider;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
@@ -104,6 +111,17 @@ public class ConverterView extends StackPane {
     private final FlowPane presetChips = new FlowPane(6, 6);
     private final CheckBox keepRatio = new CheckBox("Keep aspect ratio");
     private final CheckBox enlargeSmaller = new CheckBox("Enlarge smaller images");
+    private final Slider brightness = new Slider(-100, 100, 0);
+    private final Slider contrast = new Slider(-100, 100, 0);
+    private final Slider gamma = new Slider(0.2, 3.0, 1.0);
+    private final Slider saturation = new Slider(-100, 100, 0);
+    private final Slider sharpen = new Slider(0, 3, 0);
+    private final ComboBox<Dither> ditherBox = new ComboBox<>();
+    private final FlowPane lookChips = new FlowPane(6, 6);
+    private final CheckBox fill = new CheckBox("Fill the canvas");
+    private final ToggleButton cropToggle = new ToggleButton("Crop");
+    private CropOverlay cropOverlay;
+
     private final TextField onCalcName = new TextField();
     private final Spinner<Integer> onCalcNumber = new Spinner<>(0, 9, 1);
     private final Label onCalcHint = new Label();
@@ -289,8 +307,11 @@ public class ConverterView extends StackPane {
         sizeWarning.setManaged(false);
         sizeWarning.setGraphic(new FontIcon(Feather.ALERT_TRIANGLE));
 
-        sourcePane = previewCard("Source", sourceView, sourceCaption);
-        previewPane = previewCard("Preview", previewView, previewCaption, sizeWarning);
+        cropOverlay = new CropOverlay(sourceView);
+        cropOverlay.setOnChange(this::cropChanged);
+
+        sourcePane = previewCard("Source", sourceView, cropOverlay, sourceCaption);
+        previewPane = previewCard("Preview", previewView, null, previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
         // being produced. An accent edge is enough; the caption underneath already names the format.
         previewPane.getStyleClass().add("result");
@@ -301,11 +322,11 @@ public class ConverterView extends StackPane {
         return row;
     }
 
-    private Node previewCard(String title, ImageView view, Label... captions) {
+    private Node previewCard(String title, ImageView view, Node overlay, Label... captions) {
         Label heading = new Label(title);
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
-        StackPane frame = new StackPane(view);
+        StackPane frame = overlay == null ? new StackPane(view) : new StackPane(view, overlay);
         frame.getStyleClass().add("preview-frame");
         VBox.setVgrow(frame, Priority.ALWAYS);
         // An ImageView reports the image's own size as its preferred size, which would make the
@@ -401,6 +422,8 @@ public class ConverterView extends StackPane {
             keepRatio,
             enlargeSmaller,
             new Separator(),
+            buildImageControls(),
+            new Separator(),
             field("On-calculator name", onCalcName),
             field("Slot number", onCalcNumber),
             onCalcHint);
@@ -413,6 +436,194 @@ public class ConverterView extends StackPane {
 
         settingsSide = new SidePanel(scroll, settingsRail(), 300, Pos.TOP_RIGHT);
         return settingsSide;
+    }
+
+    /**
+     * The controls the reference does not have.
+     *
+     * <p>Folded away by default. They are the ones most conversions never need, and the panel is
+     * already long enough that putting five more sliders permanently at eye level would bury the
+     * format picker that every conversion does need.
+     */
+    private Node buildImageControls() {
+        Label heading = new Label("Image");
+        heading.getStyleClass().add(Styles.TEXT_CAPTION);
+
+        VBox body = new VBox(10);
+        body.setVisible(false);
+        body.setManaged(false);
+
+        // Built by hand rather than through iconButton: the handler has to swap the button's own
+        // graphic, which it cannot do from a Runnable created before the button exists.
+        Button fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
+        fold.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
+        fold.setTooltip(new Tooltip("Show the image controls"));
+        fold.setOnAction(e -> {
+            boolean showing = !body.isVisible();
+            body.setVisible(showing);
+            body.setManaged(showing);
+            fold.setGraphic(new FontIcon(showing ? Feather.CHEVRON_UP : Feather.CHEVRON_DOWN));
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox header = new HBox(8, heading, spacer, fold);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        // A look writes its numbers into the sliders and is then forgotten, so what the panel shows
+        // is always what will actually be applied.
+        for (Look look : Look.values()) {
+            Button chip = new Button(capitalise(look.id()));
+            chip.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+            chip.setTooltip(new Tooltip(look == Look.DOCUMENT
+                ? "Text and screenshots: harder contrast, no dithering"
+                : "Photographs: a little more contrast and bite"));
+            chip.setOnAction(e -> applyLook(look));
+            lookChips.getChildren().add(chip);
+        }
+        Button reset = new Button("Reset");
+        reset.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
+        reset.setOnAction(e -> applyAdjustments(Adjustments.NONE, Dither.AUTO));
+        lookChips.getChildren().add(reset);
+
+        ditherBox.setItems(FXCollections.observableArrayList(Dither.values()));
+        ditherBox.setConverter(labeller(d -> switch (d) {
+            case AUTO -> "Automatic";
+            case ON -> "On";
+            case OFF -> "Off";
+        }));
+        ditherBox.getSelectionModel().select(Dither.AUTO);
+        ditherBox.setMaxWidth(Double.MAX_VALUE);
+        ditherBox.valueProperty().addListener((o, was, now) -> schedulePreview());
+
+        onSettled(brightness);
+        onSettled(contrast);
+        onSettled(gamma);
+        onSettled(saturation);
+        onSettled(sharpen);
+
+        fill.setTooltip(new Tooltip(
+            "Crop the source to the canvas proportions instead of padding it with white"));
+        fill.selectedProperty().addListener((o, was, now) -> {
+            updateCropAspect();
+            schedulePreview();
+        });
+
+        cropToggle.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        cropToggle.setTooltip(new Tooltip("Draw the part of the image to convert, on the source"));
+        cropToggle.selectedProperty().addListener((o, was, now) -> {
+            updateCropAspect();
+            cropOverlay.setActive(now);
+        });
+
+        Button clearCrop = new Button("Clear");
+        clearCrop.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
+        clearCrop.setOnAction(e -> {
+            cropOverlay.clear();
+            cropToggle.setSelected(false);
+        });
+
+        HBox cropRow = new HBox(6, cropToggle, clearCrop);
+        cropRow.setAlignment(Pos.CENTER_LEFT);
+
+        body.getChildren().addAll(
+            lookChips,
+            field("Dithering", ditherBox),
+            slider("Brightness", brightness),
+            slider("Contrast", contrast),
+            slider("Gamma", gamma),
+            slider("Saturation", saturation),
+            slider("Sharpen", sharpen),
+            fill,
+            cropRow);
+
+        return new VBox(10, header, body);
+    }
+
+    /**
+     * A slider that reports when it has stopped moving.
+     *
+     * <p>Not on every value: preprocessing a large image is felt, and re-running it for each pixel
+     * of a drag leaves the preview chasing the handle. The two listeners between them cover a drag,
+     * a click on the track and the arrow keys.
+     */
+    private void onSettled(Slider slider) {
+        slider.valueProperty().addListener((o, was, now) -> {
+            if (!slider.isValueChanging()) {
+                schedulePreview();
+            }
+        });
+        slider.valueChangingProperty().addListener((o, was, changing) -> {
+            if (!changing) {
+                schedulePreview();
+            }
+        });
+    }
+
+    /** A slider with its name and its current value, which a bare handle does not tell you. */
+    private Node slider(String label, Slider control) {
+        Label caption = new Label(label);
+        caption.getStyleClass().add(Styles.TEXT_CAPTION);
+
+        Label value = new Label();
+        value.getStyleClass().add(Styles.TEXT_MUTED);
+        value.textProperty().bind(control.valueProperty().map(
+            v -> control == gamma || control == sharpen
+                ? String.format("%.1f", v.doubleValue())
+                : String.valueOf(v.intValue())));
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox top = new HBox(8, caption, spacer, value);
+        top.setAlignment(Pos.CENTER_LEFT);
+
+        control.setMaxWidth(Double.MAX_VALUE);
+        return new VBox(2, top, control);
+    }
+
+    private void applyLook(Look look) {
+        applyAdjustments(look.adjustments(), look.dither());
+    }
+
+    private void applyAdjustments(Adjustments values, Dither dither) {
+        updating = true;
+        brightness.setValue(values.brightness());
+        contrast.setValue(values.contrast());
+        gamma.setValue(values.gamma());
+        saturation.setValue(values.saturation());
+        sharpen.setValue(values.sharpen());
+        ditherBox.getSelectionModel().select(dither);
+        updating = false;
+        schedulePreview();
+    }
+
+    private Adjustments currentAdjustments() {
+        return new Adjustments((int) Math.round(brightness.getValue()),
+            (int) Math.round(contrast.getValue()), gamma.getValue(),
+            (int) Math.round(saturation.getValue()), sharpen.getValue());
+    }
+
+    /** Locks the rectangle to the canvas while filling, since that is the shape filling produces. */
+    private void updateCropAspect() {
+        if (cropOverlay == null) {
+            return;
+        }
+        cropOverlay.setAspect(fill.isSelected() && heightSpinner.getValue() > 0
+            ? (double) widthSpinner.getValue() / heightSpinner.getValue()
+            : 0);
+    }
+
+    /** The crop belongs to the image, not to the settings: each queued file keeps its own. */
+    private void cropChanged() {
+        ConversionJob job = queue.getSelectionModel().getSelectedItem();
+        if (job != null) {
+            job.setCrop(cropOverlay.crop());
+        }
+        schedulePreview();
+    }
+
+    private static String capitalise(String text) {
+        return text.substring(0, 1).toUpperCase() + text.substring(1);
     }
 
     /** A panel heading: the icon gives the two side panels a shared rhythm, the chevron folds. */
@@ -509,8 +720,14 @@ public class ConverterView extends StackPane {
         targetBox.valueProperty().addListener((o, was, now) -> onTargetChanged());
         formatBox.valueProperty().addListener((o, was, now) -> onFormatChanged());
 
-        widthSpinner.valueProperty().addListener((o, was, now) -> schedulePreview());
-        heightSpinner.valueProperty().addListener((o, was, now) -> schedulePreview());
+        widthSpinner.valueProperty().addListener((o, was, now) -> {
+            updateCropAspect();
+            schedulePreview();
+        });
+        heightSpinner.valueProperty().addListener((o, was, now) -> {
+            updateCropAspect();
+            schedulePreview();
+        });
         colorsSpinner.valueProperty().addListener((o, was, now) -> schedulePreview());
         keepRatio.selectedProperty().addListener((o, was, now) -> schedulePreview());
         enlargeSmaller.selectedProperty().addListener((o, was, now) -> schedulePreview());
@@ -618,6 +835,11 @@ public class ConverterView extends StackPane {
             .withKeepRatio(keepRatio.isSelected())
             .withEnlargeSmaller(enlargeSmaller.isSelected())
             .withOnCalc(name, onCalcNumber.getValue())
+            .withAdjustments(currentAdjustments())
+            .withDither(ditherBox.getValue() == null ? Dither.AUTO : ditherBox.getValue())
+            // The crop comes off the job and everything else off the panel: one rectangle shared
+            // by ten different photographs would be a rectangle that suits none of them.
+            .withFraming(new Framing(fill.isSelected(), job == null ? null : job.crop()))
             .clampedTo(format);
     }
 
@@ -633,10 +855,14 @@ public class ConverterView extends StackPane {
         BufferedImage src = job.source();
         if (src == null) {
             Animations.swap(sourceView, null);
+            cropOverlay.setImage(0, 0, null);
             sourceCaption.setText("Could not read this file: " + job.error());
         } else {
             Animations.swap(sourceView, SwingFXUtils.toFXImage(src, null));
             sourceCaption.setText(job.name() + " — " + src.getWidth() + " × " + src.getHeight());
+            // Whatever was drawn on this image last time, back where it was.
+            cropOverlay.setImage(src.getWidth(), src.getHeight(), job.crop());
+            cropToggle.setSelected(job.crop() != null);
         }
         schedulePreview();
     }

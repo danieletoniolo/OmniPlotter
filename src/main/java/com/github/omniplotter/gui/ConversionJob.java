@@ -3,6 +3,7 @@ package com.github.omniplotter.gui;
 import com.github.omniplotter.engine.EngineApi;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.ConversionResult;
+import com.github.omniplotter.engine.data.Crop;
 import com.github.omniplotter.engine.data.Format;
 
 import java.awt.image.BufferedImage;
@@ -22,6 +23,15 @@ public class ConversionJob {
     private BufferedImage source;
     private String error;
 
+    /**
+     * The part of this image to convert, or null for all of it.
+     *
+     * <p>Kept here rather than with the rest of the settings because it is the one choice that is
+     * about the picture and not about the file being produced: a queue of ten photographs wants ten
+     * rectangles, while they all want the same format.
+     */
+    private Crop crop;
+
     public ConversionJob(File file) {
         this.file = file;
     }
@@ -36,6 +46,14 @@ public class ConversionJob {
 
     public String error() {
         return error;
+    }
+
+    public Crop crop() {
+        return crop;
+    }
+
+    public void setCrop(Crop crop) {
+        this.crop = crop;
     }
 
     /** Decodes the image, remembering any failure so the list can show it. */
