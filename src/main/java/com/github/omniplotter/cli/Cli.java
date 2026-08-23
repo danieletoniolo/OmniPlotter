@@ -19,6 +19,7 @@ import picocli.CommandLine.Command;
         ConvertCommand.class,
         FormatsCommand.class,
         TargetsCommand.class,
+        GridsCommand.class,
         InspectCommand.class,
         UpdateCommand.class,
         SetupCommand.class,

@@ -10,6 +10,11 @@ import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.data.Framing;
 import com.github.omniplotter.engine.data.Look;
+import com.github.omniplotter.engine.data.PageSize;
+import com.github.omniplotter.engine.data.Tile;
+import com.github.omniplotter.engine.data.TilePlan;
+import com.github.omniplotter.engine.data.Tiling;
+import com.github.omniplotter.engine.pdf.PdfPages;
 import com.github.omniplotter.engine.data.Mode;
 import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
@@ -18,6 +23,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,6 +74,24 @@ public class ConvertCommand implements Callable<Integer> {
     @Option(names = "--no-keep-ratio", description = "Stretch to the canvas instead of preserving "
         + "the source aspect ratio.")
     private boolean noKeepRatio;
+
+    @Option(names = "--grid", paramLabel = "RxC",
+        description = "Cut each page into this many rows by columns, converting every piece. "
+            + "Columns are what carry resolution; see the 'grids' command.")
+    private String grid;
+
+    @Option(names = "--pages", paramLabel = "LIST",
+        description = "Which pages of a document to convert, as 1-3,7. Default: all of them.")
+    private String pages;
+
+    @Option(names = "--overlap", paramLabel = "PERCENT",
+        description = "How far each tile reaches into its neighbours, so a line of text on a cut "
+            + "survives in one of them. Default 3.")
+    private Double overlap;
+
+    @Option(names = "--start-slot", paramLabel = "N",
+        description = "First picture slot to number tiles from, for formats addressed by one.")
+    private Integer startSlot;
 
     @Option(names = "--look", paramLabel = "NAME",
         description = "Starting point for the controls below: ${COMPLETION-CANDIDATES}. "
@@ -251,6 +275,18 @@ public class ConvertCommand implements Callable<Integer> {
             return 2;
         }
 
+        // Checked before anything is opened: a malformed grid or page list is a usage error, and
+        // one is worth telling apart from a conversion that was attempted and failed.
+        try {
+            tiling();
+            if (pages != null) {
+                parsePages(pages);
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
+
         boolean multiple = inputs.size() > 1;
         if (multiple && output != null && output.exists() && !output.isDirectory()) {
             System.err.println("With several inputs, --output must be a directory.");
@@ -269,6 +305,9 @@ public class ConvertCommand implements Callable<Integer> {
         return failures == 0 ? 0 : 1;
     }
 
+    /** How far above the output resolution a page is rendered, so the downscale has something to work with. */
+    private static final double OVERSAMPLE = 2;
+
     private boolean convertOne(File input, Format format, Target target,
                                ConversionOptions options, boolean multiple) throws Exception {
         if (!input.isFile()) {
@@ -276,20 +315,150 @@ public class ConvertCommand implements Callable<Integer> {
             return false;
         }
         byte[] bytes = Files.readAllBytes(input.toPath());
+        Tiling tiling = tiling();
+        String named = onCalcName == null ? input.getName() : onCalcName;
+        int slot = startSlot == null ? onCalcNumber : startSlot;
 
-        // The on-calc name defaults to the input file's name when not given explicitly.
-        ConversionOptions perFile = onCalcName == null
-            ? options.withOnCalc(OnCalcName.suggestFrom(format, input.getName()), options.onCalcNumber())
-            : options;
+        // A document and an image differ only in where the pixels come from and how many pages
+        // there are. Everything after that is the same loop.
+        if (PdfPages.isPdf(bytes)) {
+            try (PdfPages document = PdfPages.open(bytes)) {
+                List<Integer> selected = pages(document.pageCount());
+                TilePlan plan = TilePlan.of(named, format, target, selected, tiling, slot);
+                announce(plan);
 
-        ConversionResult result = EngineApi.convert(bytes, input.getName(), format, perFile);
+                boolean ok = true;
+                for (int page : selected) {
+                    PageSize size = document.sizeOf(page);
+                    BufferedImage rendered = document.render(page, renderDpi(size, options, tiling));
+                    ok &= convertTiles(input, rendered, page, format, target, options, tiling, plan, multiple);
+                }
+                return ok;
+            }
+        }
 
+        if (pages != null) {
+            System.err.println("note: --pages applies to documents; " + input.getName()
+                + " is a single image.");
+        }
+        BufferedImage image = EngineApi.decode(bytes, input.getName());
+        TilePlan plan = TilePlan.of(named, format, target, List.of(1), tiling, slot);
+        announce(plan);
+        return convertTiles(input, image, 1, format, target, options, tiling, plan, multiple);
+    }
+
+    private Tiling tiling() {
+        Tiling requested = grid == null ? Tiling.NONE : Tiling.parse(grid);
+        return overlap == null
+            ? requested
+            : new Tiling(requested.rows(), requested.columns(), overlap / 100.0);
+    }
+
+    /**
+     * The resolution to render a page at.
+     *
+     * <p>Derived from what the output actually needs — the canvas width, once per column — and then
+     * doubled, so the pipeline is downscaling rather than enlarging. Rendering at a fixed low
+     * resolution and scaling up is the mistake that makes this kind of tool look cheap.
+     */
+    private int renderDpi(PageSize page, ConversionOptions options, Tiling tiling) {
+        double needed = (double) options.width() * tiling.columns() / page.widthInches();
+        return (int) Math.ceil(needed * OVERSAMPLE);
+    }
+
+    /** Says what is about to happen, while it can still be stopped. */
+    private void announce(TilePlan plan) {
+        if (plan.count() > 1) {
+            System.out.println(plan.summary() + "...");
+        }
+        plan.warnings().forEach(warning -> System.err.println("warning: " + warning));
+    }
+
+    private List<Integer> pages(int pageCount) {
+        if (pages == null) {
+            return java.util.stream.IntStream.rangeClosed(1, pageCount).boxed().toList();
+        }
+        List<Integer> selected = parsePages(pages);
+        for (int page : selected) {
+            // Out of range is a mistake worth stopping for rather than silently trimming: asking
+            // for pages 1-10 of a five-page document is not a request to convert five.
+            if (page > pageCount) {
+                throw new IllegalArgumentException("this document has " + pageCount
+                    + (pageCount == 1 ? " page" : " pages") + "; there is no page " + page);
+            }
+        }
+        return selected;
+    }
+
+    /** Reads {@code 1-3,7}. Syntax only — how many pages there are is not known until one is open. */
+    static List<Integer> parsePages(String spec) {
+        java.util.SortedSet<Integer> selected = new java.util.TreeSet<>();
+        for (String part : spec.split(",")) {
+            String piece = part.trim();
+            if (piece.isEmpty()) {
+                continue;
+            }
+            int dash = piece.indexOf('-', 1);
+            try {
+                int from = Integer.parseInt((dash < 0 ? piece : piece.substring(0, dash)).trim());
+                int to = dash < 0 ? from : Integer.parseInt(piece.substring(dash + 1).trim());
+                if (from > to) {
+                    throw new IllegalArgumentException("Pages run forwards: " + piece);
+                }
+                if (from < 1) {
+                    throw new IllegalArgumentException("Pages are numbered from one — got: " + piece);
+                }
+                for (int page = from; page <= to; page++) {
+                    selected.add(page);
+                }
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Pages are numbers and ranges, as 1-3,7 — got: " + spec);
+            }
+        }
+        if (selected.isEmpty()) {
+            throw new IllegalArgumentException("No pages selected by: " + spec);
+        }
+        return List.copyOf(selected);
+    }
+
+    /** Converts every piece of one page, or the whole of one image when there is no grid. */
+    private boolean convertTiles(File input, BufferedImage image, int page, Format format, Target target,
+                                 ConversionOptions options, Tiling tiling, TilePlan plan,
+                                 boolean multiple) throws Exception {
+        if (!tiling.fits(image.getWidth(), image.getHeight())) {
+            System.err.println(input.getName() + ": " + image.getWidth() + "x" + image.getHeight()
+                + " is too small to cut into " + tiling);
+            return false;
+        }
+
+        boolean ok = true;
+        for (Tile tile : tiling.tilesOf(image.getWidth(), image.getHeight())) {
+            TilePlan.PlannedTile planned = plan.at(page, tile.row(), tile.column());
+            ConversionOptions perTile = options.withOnCalc(planned.onCalcName(), planned.slot());
+            // Left alone when there is no grid, so a plain conversion keeps whatever --crop said.
+            if (!tiling.isWhole()) {
+                perTile = perTile.withCrop(tile.crop());
+            }
+            ok &= convertTile(input, image, format, target, perTile,
+                plan.count() > 1 ? planned.fileName() : null, multiple);
+        }
+        return ok;
+    }
+
+    private boolean convertTile(File input, BufferedImage image, Format format, Target target,
+                                ConversionOptions perFile, String fileName, boolean multiple)
+            throws Exception {
+        ConversionResult result = EngineApi.convert(image, input.getName(), format, perFile);
+
+        // A tile carries a name of its own, which says which part of which page it is; a single
+        // conversion keeps the name the encoder suggests, exactly as before.
+        String name = fileName == null ? result.suggestedFileName() : fileName;
         Path destination;
         if (output == null) {
-            destination = Path.of(result.suggestedFileName());
-        } else if (output.isDirectory() || multiple) {
+            destination = Path.of(name);
+        } else if (output.isDirectory() || multiple || fileName != null) {
             Files.createDirectories(output.toPath());
-            destination = output.toPath().resolve(result.suggestedFileName());
+            destination = output.toPath().resolve(name);
         } else {
             destination = output.toPath();
         }

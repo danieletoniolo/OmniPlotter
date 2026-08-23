@@ -171,6 +171,61 @@ class CliSnapshotTest {
         assertTrue(stderr().toUpperCase().contains("AUTO"), stderr());
     }
 
+    @Test
+    void gridsSayHowLegibleEachWayOfCuttingAPageWouldBe() {
+        assertEquals(0, run("grids", "--target", "cg"));
+
+        String table = stdout();
+        assertTrue(table.contains("DPI"), table);
+        assertTrue(table.contains("TEXT LINE"), table);
+        // The point the command exists to make.
+        assertTrue(table.contains("Resolution comes from columns"), table);
+        assertTrue(table.contains("3x1"), table);
+    }
+
+    @Test
+    void aGridProducesOneFilePerTile(@TempDir Path directory) throws IOException {
+        Path source = directory.resolve("page.png");
+        ImageIO.write(image(), "png", source.toFile());
+
+        assertEquals(0, run("convert", source.toString(), "-f", "cp.g3p", "--grid", "2x2",
+            "-o", directory.toString()));
+
+        for (String tile : new String[]{"page-r1c1.g3p", "page-r1c2.g3p", "page-r2c1.g3p", "page-r2c2.g3p"}) {
+            assertTrue(Files.exists(directory.resolve(tile)), "missing " + tile + " in "
+                + Files.list(directory).toList());
+        }
+        // Said before the files appear, not after.
+        assertTrue(stdout().contains("4 files"), stdout());
+    }
+
+    @Test
+    void aMalformedGridIsAUsageErrorAndNotACrash() {
+        assertEquals(2, run("convert", "nothing.png", "-f", "cp.g3p", "--grid", "3"));
+
+        assertTrue(stderr().contains("rows x columns"), stderr());
+        assertFalse(stderr().contains("Exception"), "a bad argument should not print a stack trace");
+    }
+
+    @Test
+    void aMalformedPageSelectionIsAUsageErrorToo() {
+        assertEquals(2, run("convert", "nothing.png", "-f", "cp.g3p", "--pages", "1-x"));
+
+        assertTrue(stderr().contains("1-3,7"), stderr());
+        assertFalse(stderr().contains("Exception"), stderr());
+    }
+
+    @Test
+    void anImageTooSmallForTheGridSaysSoRatherThanFailingOddly(@TempDir Path directory) throws IOException {
+        Path source = directory.resolve("tiny.png");
+        ImageIO.write(new BufferedImage(3, 3, BufferedImage.TYPE_INT_RGB), "png", source.toFile());
+
+        assertEquals(1, run("convert", source.toString(), "-f", "cp.g3p", "--grid", "8x8",
+            "-o", directory.toString()));
+
+        assertTrue(stderr().contains("too small to cut"), stderr());
+    }
+
     private static BufferedImage image() {
         BufferedImage image = new BufferedImage(64, 32, BufferedImage.TYPE_INT_RGB);
         var g = image.createGraphics();
