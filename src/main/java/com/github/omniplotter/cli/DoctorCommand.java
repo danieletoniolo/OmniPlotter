@@ -17,7 +17,8 @@ import java.util.concurrent.Callable;
  * on someone's machine: the wrong copy on PATH, settings in a directory nobody looked at, a link
  * pointing at an application that has since been deleted.
  */
-@Command(name = "doctor", description = "Report where this installation keeps its pieces.")
+@Command(name = "doctor", mixinStandardHelpOptions = true,
+    description = "Report where this installation keeps its pieces.")
 public class DoctorCommand implements Callable<Integer> {
 
     @Override

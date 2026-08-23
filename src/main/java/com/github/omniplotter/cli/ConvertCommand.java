@@ -1,10 +1,15 @@
 package com.github.omniplotter.cli;
 
 import com.github.omniplotter.engine.EngineApi;
+import com.github.omniplotter.engine.data.Adjustments;
 import com.github.omniplotter.engine.data.ConversionOptions;
+import com.github.omniplotter.engine.data.Crop;
+import com.github.omniplotter.engine.data.Dither;
 import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
+import com.github.omniplotter.engine.data.Framing;
+import com.github.omniplotter.engine.data.Look;
 import com.github.omniplotter.engine.data.Mode;
 import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
@@ -20,7 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "convert", description = "Convert one or more images to a calculator format.")
+@Command(name = "convert", mixinStandardHelpOptions = true,
+    description = "Convert one or more images to a calculator format.")
 public class ConvertCommand implements Callable<Integer> {
 
     @Parameters(index = "0..*", arity = "1..*", paramLabel = "IMAGE",
@@ -62,6 +68,44 @@ public class ConvertCommand implements Callable<Integer> {
     @Option(names = "--no-keep-ratio", description = "Stretch to the canvas instead of preserving "
         + "the source aspect ratio.")
     private boolean noKeepRatio;
+
+    @Option(names = "--look", paramLabel = "NAME",
+        description = "Starting point for the controls below: ${COMPLETION-CANDIDATES}. "
+            + "'document' is the one for text and screenshots. Anything given alongside it wins.")
+    private Look look;
+
+    @Option(names = "--dither", paramLabel = "WHEN",
+        description = "Trade colour accuracy for apparent depth: ${COMPLETION-CANDIDATES}. "
+            + "'auto' is what the web tool does for the format, and is the default. Turning it "
+            + "off is what makes small text legible.")
+    private Dither dither;
+
+    @Option(names = "--brightness", paramLabel = "N", description = "-100 to 100. Default 0.")
+    private Integer brightness;
+
+    @Option(names = "--contrast", paramLabel = "N", description = "-100 to 100. Default 0.")
+    private Integer contrast;
+
+    @Option(names = "--gamma", paramLabel = "N",
+        description = "0.1 to 5.0. Above 1 lightens the midtones. Default 1.")
+    private Double gamma;
+
+    @Option(names = "--saturation", paramLabel = "N",
+        description = "-100 to 100, where -100 is grey. Default 0.")
+    private Integer saturation;
+
+    @Option(names = "--sharpen", paramLabel = "N",
+        description = "Unsharp mask strength, 0 to 5, applied after the image is resized. Default 0.")
+    private Double sharpen;
+
+    @Option(names = "--crop", paramLabel = "X,Y,W,H",
+        description = "Convert only this rectangle of the source, in source pixels.")
+    private String crop;
+
+    @Option(names = "--fill",
+        description = "Crop the source to the canvas proportions instead of padding it with "
+            + "white. Combine with --enlarge-smaller to actually reach the canvas.")
+    private boolean fill;
 
     @Option(names = "--name", paramLabel = "NAME",
         description = "On-calculator variable name. Rules vary by format; see 'formats'. Defaults to the file name.")
@@ -136,6 +180,47 @@ public class ConvertCommand implements Callable<Integer> {
         }
         if (colors != null) {
             options = options.withColors(colors);
+        }
+
+        // A look writes its values in, and anything named explicitly then overwrites them. It is
+        // deliberately not a mode: nothing downstream knows a look was ever chosen, so
+        // `--look document --contrast 0` means what it says.
+        if (look != null) {
+            options = options.withLook(look);
+        }
+        Adjustments adjustments = options.adjustments();
+        if (brightness != null) {
+            adjustments = adjustments.withBrightness(brightness);
+        }
+        if (contrast != null) {
+            adjustments = adjustments.withContrast(contrast);
+        }
+        if (gamma != null) {
+            adjustments = adjustments.withGamma(gamma);
+        }
+        if (saturation != null) {
+            adjustments = adjustments.withSaturation(saturation);
+        }
+        if (sharpen != null) {
+            adjustments = adjustments.withSharpen(sharpen);
+        }
+        options = options.withAdjustments(adjustments);
+
+        if (dither != null) {
+            options = options.withDither(dither);
+        }
+
+        if (crop != null || fill) {
+            Crop rectangle = null;
+            if (crop != null) {
+                try {
+                    rectangle = Crop.parse(crop);
+                } catch (IllegalArgumentException e) {
+                    System.err.println(e.getMessage());
+                    return 2;
+                }
+            }
+            options = options.withFraming(new Framing(fill, rectangle));
         }
 
         // Report anything the format will not honour, rather than silently substituting.

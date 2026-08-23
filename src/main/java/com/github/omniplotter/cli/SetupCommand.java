@@ -17,7 +17,8 @@ import java.util.concurrent.Callable;
  * <p>The one part that asks before acting is the shell startup file. Everything else happens inside
  * directories that belong to the user and can be undone with {@code --uninstall}.
  */
-@Command(name = "setup", description = "Make the omniplotter command available in a terminal.")
+@Command(name = "setup", mixinStandardHelpOptions = true,
+    description = "Make the omniplotter command available in a terminal.")
 public class SetupCommand implements Callable<Integer> {
 
     @Option(names = "--uninstall", description = "Remove the link instead of creating it.")

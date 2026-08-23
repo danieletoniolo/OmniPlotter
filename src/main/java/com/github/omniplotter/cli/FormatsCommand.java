@@ -11,7 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-@Command(name = "formats", description = "List output formats, with their canvas and colour limits.")
+@Command(name = "formats", mixinStandardHelpOptions = true,
+    description = "List output formats, with their canvas and colour limits.")
 public class FormatsCommand implements Callable<Integer> {
 
     @Option(names = {"-t", "--target"}, paramLabel = "TARGET",

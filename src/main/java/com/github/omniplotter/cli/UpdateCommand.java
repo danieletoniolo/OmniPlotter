@@ -16,7 +16,8 @@ import java.util.concurrent.Callable;
  * <p>Unlike the window's check, this one runs whatever the daily interval and the skipped version
  * say: someone typing the command is asking now.
  */
-@Command(name = "update", description = "Check whether a newer release is available.")
+@Command(name = "update", mixinStandardHelpOptions = true,
+    description = "Check whether a newer release is available.")
 public class UpdateCommand implements Callable<Integer> {
 
     @Option(names = "--auto", paramLabel = "true|false",

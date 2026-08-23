@@ -8,7 +8,8 @@ import picocli.CommandLine.Option;
 
 import java.util.concurrent.Callable;
 
-@Command(name = "targets", description = "List calculator models and the formats they accept.")
+@Command(name = "targets", mixinStandardHelpOptions = true,
+    description = "List calculator models and the formats they accept.")
 public class TargetsCommand implements Callable<Integer> {
 
     @Option(names = {"-m", "--mode"}, paramLabel = "MODE",

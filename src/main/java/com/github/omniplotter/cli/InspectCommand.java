@@ -8,7 +8,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.concurrent.Callable;
 
-@Command(name = "inspect",
+@Command(name = "inspect", mixinStandardHelpOptions = true,
     description = "Read back a Casio picture file and report its structure.")
 public class InspectCommand implements Callable<Integer> {
 

@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -128,6 +129,46 @@ class CliSnapshotTest {
             "-o", directory.toString()));
 
         assertTrue(stderr().contains("not a file"), stderr());
+    }
+
+    @Test
+    void helpDescribesTheImageControls() {
+        assertEquals(0, run("convert", "--help"));
+
+        String help = stdout();
+        for (String option : new String[]{"--look", "--dither", "--brightness", "--contrast",
+                "--gamma", "--saturation", "--sharpen", "--crop", "--fill"}) {
+            assertTrue(help.contains(option), "convert --help does not mention " + option + ":\n" + help);
+        }
+        // The candidates come from the enums themselves, so a new look appears here for free.
+        assertTrue(help.contains("photo") && help.contains("document"), help);
+    }
+
+    @Test
+    void aLookConvertsLikeAnythingElse(@TempDir Path directory) throws IOException {
+        Path source = directory.resolve("source.png");
+        ImageIO.write(image(), "png", source.toFile());
+
+        assertEquals(0, run("convert", source.toString(), "-f", "cp.g3p", "--look", "document",
+            "--contrast", "20", "--fill", "-o", directory.toString()));
+
+        assertTrue(Files.exists(directory.resolve("source.g3p")));
+    }
+
+    @Test
+    void aMalformedCropIsAUsageErrorAndNotACrash() {
+        assertEquals(2, run("convert", "nothing.png", "-f", "cp.g3p", "--crop", "1,2,3"));
+
+        assertTrue(stderr().contains("x,y,width,height"), stderr());
+        assertFalse(stderr().contains("Exception"), "a bad argument should not print a stack trace");
+    }
+
+    @Test
+    void anUnknownDitherSettingListsTheRealOnes() {
+        assertEquals(2, run("convert", "nothing.png", "-f", "cp.g3p", "--dither", "maybe"));
+
+        assertTrue(stderr().contains("--dither"), stderr());
+        assertTrue(stderr().toUpperCase().contains("AUTO"), stderr());
     }
 
     private static BufferedImage image() {
