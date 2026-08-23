@@ -39,67 +39,32 @@ Every default is still the reference's behaviour, which is what keeps `Preproces
 meaningful. Filling decides proportions only — reaching the canvas is still `--enlarge-smaller`'s
 job, as it was before.
 
-## 1.2 — PDF input and tiling
+### 1.2 — documents and tiling
 
-Take a document, cut it into pieces that each fill the screen, and convert every piece. A page of
-notes on a calculator is a different use case from a picture on a calculator, and it is the point
-where this stops being a port of img2calc and becomes its own thing.
+PDF pages rendered at the resolution the output needs, cut into a grid of tiles that each fill the
+screen, in both faces. `grids` reports what each way of cutting a page would give; the window draws
+the grid over the page and lets cells be switched off.
 
-### Tiling is not a PDF feature
+Four things came out differently from how this section first described them:
 
-The split belongs in a geometry stage before preprocessing, independent of where the pixels came
-from, so it works on a large scan just as well. PDF then adds only a decoder that turns pages into
-`BufferedImage`s. Bolting a document-shaped path onto the converter would be the wrong shape and
-would not survive the second format anyone asks for.
+- **This section planned 9×3 for three columns of A4, and the code offers 8×3.** Both waste about
+  six percent of a 2:1 screen; the implementation picks, for each column count, the row count that
+  wastes least. The resolution is unaffected either way — it depends only on the columns, which was
+  the point the plan was making.
+- **"Useless for text" was too strong, and shipping it as a verdict was a mistake.** The first
+  version labelled grids "too small to read" from an assumed ten-point body text. Whether a grid
+  works depends on the document as much as the screen: the same three bands that lose ten-point
+  prose give eighteen-point notes twelve pixels a line, which reads perfectly well on a CG50. The
+  figure is now quoted against a type size that is stated, with `--text-size` to change it.
+- **Clicking a cell first excluded it**, which made it impossible to look around a grid: one gesture
+  cannot both show you a piece and throw it away. Clicking now selects, stepping through the pieces
+  has its own control, and excluding is a button that says so.
+- **The window converts the page on screen**, not the whole document. Cells are switched off by
+  looking at them, so converting pages nobody has looked at would apply a judgement that was never
+  made. The command line is where a whole document goes through at once.
 
-### The arithmetic, and why the interface has to show it
-
-For an A4 page cut into `r` rows and `c` columns, each cell has aspect ratio `0.707 × r/c`. Matching
-it to the target screen gives families rather than single answers:
-
-| Screen | Grids that fit | Tiles | Effective DPI |
-|---|---|---|---|
-| 384 × 192 (Casio CG, 2:1) | 3 × 1 | 3 | 46 |
-| | 6 × 2 | 12 | 93 |
-| | 9 × 3 | 27 | 139 |
-| 320 × 240 (NumWorks, TI-84 CE, 4:3) | 2 × 1 | 2 | 39 |
-| | 4 × 2 | 8 | 77 |
-| | 6 × 3 | 18 | 116 |
-
-Three horizontal bands is very nearly a perfect fit for a 2:1 screen — cells of 2.12 against the
-screen's 2.0, six percent of the height unused — and it is the obvious thing to reach for. It is
-also useless for text, and the table says why: cutting horizontally does not add a single pixel
-across the width of the page, so the resolution stays at 46 DPI whatever `r` is. Small print wants
-something like 150. Resolution comes only from columns.
-
-So a dense A4 page of text needs two or three columns, which means twelve tiles or twenty-seven, and
-an interface that asks "how many parts?" hides exactly the number that decides whether the result
-can be read. It should instead offer the grids that fit and, for each, how tall a line of text ends
-up in pixels. That is the same bargain [OutputLimits](src/main/java/com/github/omniplotter/engine/data/OutputLimits.java)
-already strikes for file sizes: find out here, not standing in front of the calculator.
-
-### The details that decide whether it is usable
-
-- **Overlap between tiles**, a few percent and configurable. Without it a line of text split down
-  the middle is lost in both halves.
-- **Render at the resolution the output needs**, deriving the DPI from the canvas width and the
-  column count, at two to four times the target and then down through the existing pipeline.
-  Rendering at a fixed low DPI and scaling up is the trap here, and it is the one that makes this
-  kind of tool look bad.
-- **Slots and names.** Twelve tiles do not fit in the ten `Pic` slots of a TI, and on a TI-73 there
-  are three. Casio names cap at eight characters.
-  [OnCalcName](src/main/java/com/github/omniplotter/engine/data/OnCalcName.java) has the rules
-  already; what is needed is automatic numbering and a warning before the conversion, not after.
-- **Multi-page documents**, with a `--pages 1-3,7` selection and an explicit count before starting,
-  because ten pages at eight tiles is eighty files.
-- **In the window**, the page with the grid drawn over it and individual tiles switched off, since
-  nobody wants the running header as one of their twelve images.
-
-Apache PDFBox does the rendering. It is Apache-2.0, which sits fine inside GPL-3.0, and adds four to
-six megabytes to the fat jar. One warning for whoever implements this: the `jlink` module list in
-[omniplotter.sh](omniplotter.sh) is maintained by hand, so a module PDFBox needs that is not in that
-list fails **only in the packaged application**, never under `./omniplotter.sh run`. Verify on an
-installer.
+PDFBox needed no addition to the hand-maintained `jlink` list, unlike the previous two releases. It
+costs four megabytes: the fat jar goes from 10 to 14, and the command-line jar from 1.5 to 5.1.
 
 ## 1.3 and beyond
 

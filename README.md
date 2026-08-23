@@ -4,6 +4,9 @@ A desktop app that converts images into the picture and script formats graphing 
 open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` / `.8ca` / `.8ci` / `.8xi` and friends, the Zero
 `pic`, and the Python generators for kandinsky, casioplot, gint, ti_draw, nsp and hpprime.
 
+It also takes a PDF or a large scan and cuts it into pieces that each fill the calculator's screen,
+which is what makes a page of notes readable on one.
+
 It is a native port of [TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), with both a
 window and a command line.
 
@@ -59,6 +62,46 @@ Each control is also available on its own — `--dither`, `--brightness`, `--con
 it. Every one of them defaults to what img2calc does, so a command without them converts exactly as
 before.
 
+### Documents
+
+A PDF converts like anything else, and a whole A4 page on a 384-pixel screen is about as readable as
+a postage stamp. `--grid` cuts it into pieces that each fill the screen and converts every one:
+
+```bash
+omniplotter grids --target cg
+omniplotter convert notes.pdf -f cp.g3p --look document --grid 8x3 -o ./tiles
+```
+
+`grids` exists because "how many parts?" is the wrong question. Cutting a page across adds no
+resolution at all — three horizontal bands fit a 2:1 screen almost perfectly and leave the page at
+46 dpi, exactly where it started — so what the table shows is the resolution each grid reaches and
+how tall a line of type ends up at it:
+
+```
+GRID     TILES   DPI    10 PT TEXT
+3x1      3       46     6 px per line
+6x2      12      93     13 px per line
+8x3      24      139    19 px per line
+```
+
+Whether a line that tall reads is not something a converter can decide: it depends on the document
+as much as the screen. Pass `--text-size` for the type you actually have — the same three bands give
+18-point notes twelve pixels a line, which is a different answer.
+
+`--pages 1-3,7` picks pages, `--overlap` sets how far tiles reach into each other so a line of text
+falling on a cut survives in one of them, and `--start-slot` says where the numbering begins on
+calculators that address pictures by number. Tiles are named `notes-p2-r3c1.g3p` on disk and
+numbered `NOTES14` on the calculator, because eight characters is all there is in the second place.
+
+Pages are rendered at what the output needs — the canvas width once per column, doubled — rather
+than at some fixed resolution and enlarged afterwards. PDF rendering is Apache PDFBox, so a
+document it cannot lay out is one this cannot convert.
+
+In the window the same thing is a grid drawn over the page: pick one, step through the pieces, and
+click any cell to exclude it, because nobody wants the running header as one of their twelve
+images. The window converts the page you are looking at; whole documents go through the command
+line.
+
 Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
 tool translates directly into a command here.
 
@@ -102,15 +145,17 @@ unless `+dither` was passed.
 ```
 src/main/java/com/github/omniplotter/
   Main.java              arguments mean CLI, none means UI
-  cli/                   convert, formats, targets, inspect
-  gui/                   JavaFX window
+  app/                   settings, logging, the update check, PATH setup
+  cli/                   convert, formats, targets, grids, inspect, update, setup, doctor
+  gui/                   JavaFX window, the crop and grid overlays
   engine/
     EngineApi            the one conversion path both faces use
     converter/           ImageOps (the ImageMagick operators), ImagePreprocessor (per-format pipeline)
     encoder/             CasioPicture, TIZ80, Python, Zero
-    data/                Format, Target, FormatConfig, ConversionOptions
+    pdf/                 PdfPages, the only thing here that knows what a PDF is
+    data/                Format, Target, ConversionOptions, Tiling, TileGrid, TilePlan
     inspect/             reads Casio files back apart
-    util/                PixelBuffer, Palette, ByteSeq, EncoderUtils
+    util/                PixelBuffer, Palette, ByteSeq, EncoderUtils, Exif
 tools/refgen/            the reference encoders and the golden-vector generator
 tools/icon/              regenerates the app icon
 reference/img2calc/      img2calc itself, as a pinned submodule
