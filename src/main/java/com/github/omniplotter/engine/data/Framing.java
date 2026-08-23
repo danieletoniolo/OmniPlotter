@@ -8,6 +8,10 @@ package com.github.omniplotter.engine.data;
  * the picture is in the first place. By the time the resize looks at the image, a filled or cropped
  * source already has the right proportions, and the reference's own logic does the rest unchanged.
  *
+ * <p>Filling decides the proportions and nothing else. Whether a small image is then scaled up to
+ * the canvas remains {@code enlargeSmaller}'s business, as it always was: a source cropped to the
+ * right shape but smaller than the screen is still smaller than the screen.
+ *
  * @param fill throw away what does not fit instead of padding the canvas with white
  * @param crop an explicit rectangle, which wins over {@code fill}; {@code null} for the whole image
  */

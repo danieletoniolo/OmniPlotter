@@ -20,6 +20,7 @@
 package com.github.omniplotter.engine.converter;
 
 import com.github.omniplotter.engine.data.ConversionOptions;
+import com.github.omniplotter.engine.data.Crop;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.data.FormatConfig;
 import com.github.omniplotter.engine.util.Palette;
@@ -82,10 +83,6 @@ public final class ImagePreprocessor {
         BufferedImage image = ImageOps.toArgb(source);
         FormatConfig config = FormatConfig.of(format);
 
-        // Whether the *source* had any transparency. Two of the monochrome script formats reorder
-        // their contrast handling based on this.
-        boolean sourceTransparent = ImageOps.hasTransparency(image);
-
         int width = config.clampWidth(options.width());
         int height = config.clampHeight(options.height());
         int colors = config.clampColors(options.colors());
@@ -93,30 +90,50 @@ public final class ImagePreprocessor {
         // The spliced formats resize into a canvas one pixel narrower, then get the column back.
         int resizeWidth = splicesColumn(format) ? width - 1 : width;
 
+        // Everything the caller asked for beyond the reference happens here, before the pipeline
+        // proper, and every one of these is a no-op at its default. Geometry first, so the tone
+        // operators see the pixels that will actually be converted and not the ones about to be
+        // thrown away — an auto-level over a border that gets cropped off reads the wrong range.
+        //
+        // Filling is measured against the box the image is really fitted into, which for a spliced
+        // format is a pixel narrower than the canvas. Against the full width it would come out
+        // fractionally too wide and leave a line of padding down one side — the exact thing it was
+        // asked to remove.
+        Crop crop = options.framing().rectangleFor(image.getWidth(), image.getHeight(), resizeWidth, height);
+        if (crop != null) {
+            image = ImageOps.crop(image, crop.x(), crop.y(), crop.width(), crop.height());
+        }
+        image = ImageOps.adjust(image, options.adjustments());
+
+        // Whether the *source* had any transparency. Two of the monochrome script formats reorder
+        // their contrast handling based on this. Read after cropping, deliberately: a crop that
+        // removes a transparent border really has produced an opaque image, and the branch that
+        // then applies is the right one for it.
+        boolean sourceTransparent = ImageOps.hasTransparency(image);
+
         // ImageMagick dithers by default; the reference disables it with `+dither` on some format
         // branches and not others. It is a persistent setting, so it also governs the `-colors`
         // step that follows. Leaving it on is what keeps a photo readable at 2 or 8 colours.
-        boolean dither = !noDither(format);
-        boolean exact = !options.keepRatio();
-        boolean shrinkOnly = !options.enlargeSmaller();
+        // AUTO is that per-format choice; the other two are someone overriding it on purpose.
+        boolean dither = options.dither().resolve(!noDither(format));
 
         return switch (format) {
             case TI_8XV -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.channelDepth(img, 5, 6, 5, 1);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case TI_8CA -> {
                 BufferedImage img = ImageOps.flatten(image, Color.WHITE);
-                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = resize(img, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.quantize(img, colors, dither);
                 yield ImageOps.spliceColumnRight(img, Color.WHITE);
             }
 
             case TI_8CI -> {
                 // -background none, so both the padding and the spliced column stay transparent.
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, TRANSPARENT);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, TRANSPARENT);
                 img = ImageOps.remap(img, Palette.load("pal8ci.png"), dither);
                 img = ImageOps.quantize(img, colors, dither);
                 yield ImageOps.spliceColumnRight(img, TRANSPARENT);
@@ -124,7 +141,7 @@ public final class ImagePreprocessor {
 
             case TI_8XI, TI_83I, TI_73I, TI_82I, TI_85I, TI_86I -> {
                 BufferedImage img = ImageOps.flatten(image, Color.WHITE);
-                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = resize(img, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.grayscale(img);
                 img = ImageOps.autoLevel(img);
                 img = ImageOps.posterize(img, 2, dither);
@@ -138,24 +155,24 @@ public final class ImagePreprocessor {
             case ZPIC -> {
                 // -background none: the encoder emits a draw command per opaque pixel and simply
                 // skips the rest, so the padding must stay transparent.
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, TRANSPARENT);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, TRANSPARENT);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case C2P, CP_G3P, CP01_G3P, CP01_G4P -> {
                 BufferedImage img = ImageOps.flatten(image, Color.WHITE);
-                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                img = resize(img, resizeWidth, height, options, config, Color.WHITE);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case I_C2P, CP_I_G3P, CP01_I_G3P, CP01_I_G4P -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.remap(img, Palette.load("palcp.png"), dither);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case CASIOPLOT_G3_PY, GINT_G3_PY, NSP_NS_PY, GRAPHIC_NS_PY, GRAPHIC_G3_PY -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.grayscale(img);
                 // On a transparent source the reference thresholds before stretching contrast, and
                 // otherwise stretches first. The order changes which shades survive.
@@ -174,18 +191,18 @@ public final class ImagePreprocessor {
                 // Depth reduction first, then resize: the reference orders it this way, and
                 // resampling after the reduction lets intermediate shades back in.
                 BufferedImage img = ImageOps.channelDepth(image, 5, 6, 5, 1);
-                img = resize(img, resizeWidth, height, exact, shrinkOnly, config, null);
+                img = resize(img, resizeWidth, height, options, config, null);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case HPPRIME_PY -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.channelDepth(img, 8, 8, 8, 1);
                 yield ImageOps.quantize(img, colors, dither);
             }
 
             case MICROBIT_PY, TI_HUB_MB_PY -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.grayscale(img);
                 img = ImageOps.autoLevel(img);
                 img = ImageOps.posterize(img, 10, dither);
@@ -198,7 +215,7 @@ public final class ImagePreprocessor {
             }
 
             default -> {
-                BufferedImage img = resize(image, resizeWidth, height, exact, shrinkOnly, config, Color.WHITE);
+                BufferedImage img = resize(image, resizeWidth, height, options, config, Color.WHITE);
                 img = ImageOps.channelDepth(img, 8, 8, 8, 1);
                 yield ImageOps.quantize(img, colors, dither);
             }
@@ -206,17 +223,29 @@ public final class ImagePreprocessor {
     }
 
     /**
-     * Resizes, and for fixed-size formats pads the result out to the full canvas.
+     * Resizes, sharpens, and for fixed-size formats pads the result out to the full canvas.
      *
      * <p>The reference only appends {@code -extent} when the canvas is not user-editable. A format
      * whose size the user can change is fitted inside the box and left at whatever size that gave;
      * a fixed-size one is always padded to exactly its canvas, because the calculator expects a
      * specific number of pixels.
+     *
+     * <p>Sharpening lives here, between the two, for two reasons. It has to be after the resize,
+     * because it is the resampling that softens the edges and there is no point sharpening pixels
+     * that are about to be averaged away. And it has to be before the extent, or the mask would
+     * find an edge along the border between the picture and its padding and draw a halo there.
+     *
+     * <p>Every branch above funnels through this method, which is why one insertion covers all of
+     * them.
      */
     private static BufferedImage resize(BufferedImage image, int width, int height,
-                                        boolean exact, boolean shrinkOnly,
+                                        ConversionOptions options,
                                         FormatConfig config, Color background) {
-        BufferedImage resized = ImageOps.resize(image, width, height, exact, shrinkOnly);
+        // The reference's two resize flags, in its own terms: "exact" ignores the aspect ratio,
+        // and without "enlarge smaller" an image already smaller than the canvas is left alone.
+        BufferedImage resized = ImageOps.resize(image, width, height,
+            !options.keepRatio(), !options.enlargeSmaller());
+        resized = ImageOps.sharpen(resized, options.adjustments().sharpen());
         if (!config.editableSize()) {
             resized = ImageOps.extent(resized, width, height, background);
         }
