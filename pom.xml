@@ -29,6 +29,7 @@
         <ikonli.version>12.3.1</ikonli.version>
         <picocli.version>4.7.6</picocli.version>
         <twelvemonkeys.version>3.12.0</twelvemonkeys.version>
+        <pdfbox.version>3.0.5</pdfbox.version>
         <junit.version>5.11.3</junit.version>
 
         <!-- One entry point for both faces of the app: arguments mean CLI, none means UI. -->
@@ -148,6 +149,19 @@
             <groupId>com.twelvemonkeys.imageio</groupId>
             <artifactId>imageio-tiff</artifactId>
             <version>${twelvemonkeys.version}</version>
+        </dependency>
+
+        <!--
+            Rendering PDF pages. Apache-2.0, which sits fine inside GPL-3.0.
+
+            It is the one dependency here that is genuinely large, and it goes into the
+            command-line jar as well: a CLI that opens every format except the one this release is
+            about would be a thing to explain rather than a thing to use.
+        -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
         <dependency>

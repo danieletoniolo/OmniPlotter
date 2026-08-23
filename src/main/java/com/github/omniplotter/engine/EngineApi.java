@@ -5,6 +5,7 @@ import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.ConversionResult;
 import com.github.omniplotter.engine.data.Format;
 import com.github.omniplotter.engine.encoder.FileEncoder;
+import com.github.omniplotter.engine.pdf.PdfPages;
 import com.github.omniplotter.engine.util.Exif;
 
 import javax.imageio.ImageIO;
@@ -62,6 +63,14 @@ public final class EngineApi {
     }
 
     public static BufferedImage decode(byte[] imageBytes, String name) throws IOException {
+        // A document with nothing said about it converts as its first page. Tiling asks for a
+        // resolution of its own; this path renders comfortably above what any single tile needs.
+        if (PdfPages.isPdf(imageBytes)) {
+            try (PdfPages pages = PdfPages.open(imageBytes)) {
+                return pages.render(1, PdfPages.DEFAULT_DPI);
+            }
+        }
+
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
         if (image == null) {
             throw new IOException(unreadable(imageBytes));
@@ -89,7 +98,7 @@ public final class EngineApi {
             .sorted()
             .collect(Collectors.joining(", "));
         // Both callers already say which file this was about, so the message does not repeat it.
-        return "Not a readable image. Readable formats are: " + readable + ".";
+        return "Not a readable image. Readable formats are: " + readable + ", pdf.";
     }
 
     /** The ISO base media brand sits at offset 4, after the size of the first box. */
