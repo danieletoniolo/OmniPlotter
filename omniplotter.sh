@@ -38,8 +38,13 @@ project_version() {
         --non-recursive org.codehaus.mojo:exec-maven-plugin:3.1.0:exec 2>/dev/null | tail -1
 }
 
+# Rebuilds when the jar is missing *or* older than anything it was built from. Checking only for
+# its existence meant that after editing a file and running the tests — which compile classes but do
+# not repackage — `run` and `cli` silently kept executing the previous build, and the change you
+# were looking for appeared not to have been made.
 ensure_jar() {
-    if [ ! -f "${JAR}" ]; then
+    if [ ! -f "${JAR}" ] \
+        || [ -n "$(find "${SCRIPT_DIR}/src" "${SCRIPT_DIR}/pom.xml" -newer "${JAR}" -print -quit 2>/dev/null)" ]; then
         echo "Building..."
         mvn -q -DskipTests package
     fi
