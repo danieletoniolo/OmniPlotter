@@ -38,6 +38,8 @@ import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -181,6 +183,13 @@ public class ConverterView extends StackPane {
     private final RingProgressIndicator progress = new RingProgressIndicator(0);
     private final Label status = new Label("Drop images to begin.");
     private final Button convertButton = new Button("Convert");
+    /**
+     * The other way to convert, kept beside the button rather than in it.
+     *
+     * <p>A SplitMenuButton would read better and cannot be the window's default button, so Enter
+     * would stop converting. This keeps that and puts the arrow next to it.
+     */
+    private final MenuButton convertMore = new MenuButton();
 
     private Path outputDir =
         Settings.getDirectory(Settings.OUTPUT_DIR, Path.of(System.getProperty("user.home"), "Desktop"));
@@ -262,6 +271,8 @@ public class ConverterView extends StackPane {
             }
         });
         queue.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> showSelection());
+        // Whatever changes the queue, the second way to convert appears and disappears with it.
+        jobs.addListener((javafx.collections.ListChangeListener<ConversionJob>) change -> updateConvertMenu());
         VBox.setVgrow(queue, Priority.ALWAYS);
 
         queue.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
@@ -1029,13 +1040,23 @@ public class ConverterView extends StackPane {
         convertButton.setDefaultButton(true);
         convertButton.getStyleClass().addAll(Styles.ACCENT, "hero");
         convertButton.setGraphic(new FontIcon(Feather.DOWNLOAD));
-        convertButton.setOnAction(e -> convertAll());
+        convertButton.setOnAction(e -> convertAll(false));
+
+        MenuItem everyPage = new MenuItem("Convert every page");
+        everyPage.setOnAction(e -> convertAll(true));
+        convertMore.getItems().add(everyPage);
+        convertMore.getStyleClass().addAll(Styles.ACCENT, "hero");
+        convertMore.setTooltip(new Tooltip("Other ways to convert"));
+        // Only for documents: on a queue of photographs there is no second way to do it.
+        convertMore.setVisible(false);
+        convertMore.setManaged(false);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
-            terminal, logs, theme, convertButton);
+            terminal, logs, theme, convertButton, convertMore);
+        HBox.setMargin(convertMore, new Insets(0, 0, 0, -8));
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10, 14, 10, 16));
         bar.getStyleClass().add("dock");
@@ -1374,7 +1395,14 @@ public class ConverterView extends StackPane {
         return seen.size();
     }
 
-    private void convertAll() {
+    /** Whether anything in the queue has more than one page, and so a second way to convert. */
+    private void updateConvertMenu() {
+        boolean anyDocument = jobs.stream().anyMatch(job -> job.pageCount() > 1);
+        convertMore.setVisible(anyDocument);
+        convertMore.setManaged(anyDocument);
+    }
+
+    private void convertAll(boolean everyPage) {
         if (jobs.isEmpty()) {
             status.setText("Nothing to convert.");
             return;
@@ -1397,7 +1425,10 @@ public class ConverterView extends StackPane {
                 for (int i = 0; i < pending.size(); i++) {
                     ConversionJob job = pending.get(i);
                     try {
-                        written[0] += job.convert(format, currentOptionsFor(job), destination).size();
+                        ConversionOptions perJob = currentOptionsFor(job);
+                        written[0] += (everyPage
+                            ? job.convertAllPages(format, perJob, destination)
+                            : job.convert(format, perJob, destination)).size();
                     } catch (Exception e) {
                         failures.add(job.name() + ": " + e.getMessage());
                     }

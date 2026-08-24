@@ -238,56 +238,97 @@ public class ConversionJob {
         return new Preview(processed, size);
     }
 
+    /** Converts the page being looked at. */
+    public List<Path> convert(Format format, ConversionOptions options, Path outputDir) throws Exception {
+        return convertPages(List.of(page), format, options, outputDir);
+    }
+
+    /** Converts every page of the document, with the grid and the exclusions each one has. */
+    public List<Path> convertAllPages(Format format, ConversionOptions options, Path outputDir)
+            throws Exception {
+        List<Integer> all = new ArrayList<>();
+        for (int p = 1; p <= pageCount(); p++) {
+            all.add(p);
+        }
+        return convertPages(all, format, options, outputDir);
+    }
+
     /**
-     * Converts every piece of every selected page and writes the results.
+     * Converts every piece of the given pages and writes the results.
+     *
+     * <p>The plan is drawn up over the whole document even when one page is being converted, so
+     * the names do not depend on how much was converted at a time. Planning only the page in hand
+     * left every page producing {@code notes-r1c1.g3p} and overwriting the last one.
      *
      * <p>With no grid this is one file and the name the encoder suggests, exactly as it always was.
-     * With one, it is the same loop the command line runs, over the same plan, so the two faces
-     * cannot disagree about what a tile is called.
      */
-    public List<Path> convert(Format format, ConversionOptions options, Path outputDir) throws Exception {
+    private List<Path> convertPages(List<Integer> pages, Format format, ConversionOptions options,
+                                    Path outputDir) throws Exception {
         Target target = options.target();
-        // The page on screen, and only that one. Cells are switched off by looking at them, so
-        // converting pages nobody has looked at would apply a judgement that was never made — and
-        // producing eighty files from a window showing one page is not a thing to do quietly. The
-        // command line is where a whole document goes through at once.
-        TilePlan plan = TilePlan.of(file.getName(), format, target, List.of(page), tiling,
+        List<Integer> everyPage = new ArrayList<>();
+        for (int p = 1; p <= pageCount(); p++) {
+            everyPage.add(p);
+        }
+        TilePlan plan = TilePlan.of(file.getName(), format, target, everyPage, tiling,
             options.onCalcNumber());
 
         Files.createDirectories(outputDir);
         List<Path> written = new ArrayList<>();
 
-        BufferedImage src = source();
-        if (src == null) {
-            throw new IllegalStateException(error == null ? "could not read image" : error);
-        }
-        if (!tiling.fits(src.getWidth(), src.getHeight())) {
-            throw new IllegalStateException(src.getWidth() + "x" + src.getHeight()
-                + " is too small to cut into " + tiling);
-        }
-
-        for (Tile tile : tiling.tilesOf(src.getWidth(), src.getHeight())) {
-            if (excludedTiles().contains(tile.label())) {
-                continue;
+        for (int p : pages) {
+            BufferedImage src = imageFor(p);
+            if (src == null) {
+                throw new IllegalStateException(error == null ? "could not read image" : error);
             }
-            TilePlan.PlannedTile planned = plan.at(page, tile.row(), tile.column());
-            ConversionOptions perTile = options.withOnCalc(planned.onCalcName(), planned.slot());
-            if (!tiling.isWhole()) {
-                perTile = perTile.withCrop(tile.crop());
+            if (!tiling.fits(src.getWidth(), src.getHeight())) {
+                throw new IllegalStateException(src.getWidth() + "x" + src.getHeight()
+                    + " is too small to cut into " + tiling);
             }
+            Set<String> excluded = excludedFor(p);
 
-            ConversionResult result = EngineApi.convert(src, file.getName(), format, perTile);
-            String name = tiling.isWhole() ? result.suggestedFileName() : planned.fileName();
-            Path destination = outputDir.resolve(name);
-            Files.write(destination, result.fileBytes());
-            written.add(destination);
+            for (Tile tile : tiling.tilesOf(src.getWidth(), src.getHeight())) {
+                if (excluded.contains(tile.label())) {
+                    continue;
+                }
+                TilePlan.PlannedTile planned = plan.at(p, tile.row(), tile.column());
+                ConversionOptions perTile = options.withOnCalc(planned.onCalcName(), planned.slot());
+                if (!tiling.isWhole()) {
+                    perTile = perTile.withCrop(tile.crop());
+                }
 
-            // allFiles() is the main output plus any companion the format wants alongside it.
-            for (var extra : result.extras()) {
-                Files.write(outputDir.resolve(extra.name()), extra.bytes());
+                ConversionResult result = EngineApi.convert(src, file.getName(), format, perTile);
+                String name = tiling.isWhole() && pageCount() == 1
+                    ? result.suggestedFileName()
+                    : planned.fileName();
+                Path destination = outputDir.resolve(name);
+                Files.write(destination, result.fileBytes());
+                written.add(destination);
+
+                // allFiles() is the main output plus any companion the format wants alongside it.
+                for (var extra : result.extras()) {
+                    Files.write(outputDir.resolve(extra.name()), extra.bytes());
+                }
             }
         }
         return written;
+    }
+
+    /** The pixels of any page, without disturbing the one the window is showing. */
+    private BufferedImage imageFor(int wanted) throws IOException {
+        if (wanted == page) {
+            return source();
+        }
+        byte[] content = bytes();
+        if (!PdfPages.isPdf(content)) {
+            return source();
+        }
+        try (PdfPages document = PdfPages.open(content)) {
+            return document.render(wanted, renderDpi);
+        }
+    }
+
+    private Set<String> excludedFor(int wanted) {
+        return excludedTiles.getOrDefault(wanted, Set.of());
     }
 
     /** Base name of the input, used as the default on-calculator variable name. */

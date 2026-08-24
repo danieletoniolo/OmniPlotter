@@ -1,5 +1,8 @@
 package com.github.omniplotter.gui;
 
+import com.github.omniplotter.engine.data.ConversionOptions;
+import com.github.omniplotter.engine.data.Format;
+import com.github.omniplotter.engine.data.Target;
 import com.github.omniplotter.engine.data.Tiling;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -12,6 +15,8 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -150,6 +155,56 @@ class ConversionJobTest {
         assertTrue(job.excludedTiles().isEmpty());
         job.setPage(1);
         assertTrue(job.excludedTiles().isEmpty(), "r1c1 of the old grid is a different piece of paper");
+    }
+
+    @Test
+    void convertingPageByPageDoesNotOverwriteTheLastPage(@TempDir Path directory) throws Exception {
+        // Every page used to produce notes-r1c1.g3p, so converting page two silently replaced
+        // page one. The names have to come from where a piece is in the document, not from how
+        // much of it was converted at a time.
+        ConversionJob job = document(directory);
+        job.setTiling(Tiling.of(3, 1));
+        Path out = directory.resolve("out");
+        ConversionOptions options = ConversionOptions.defaults(Target.CASIO_CG, Format.CP_G3P);
+
+        job.setPage(1);
+        List<Path> first = job.convert(Format.CP_G3P, options, out);
+        job.setPage(2);
+        List<Path> second = job.convert(Format.CP_G3P, options, out);
+
+        assertEquals(3, first.size());
+        assertEquals(3, second.size());
+        assertTrue(Collections.disjoint(first, second), first + " and " + second + " overlap");
+        try (var listing = Files.list(out)) {
+            assertEquals(6, listing.count());
+        }
+        assertTrue(first.get(0).getFileName().toString().contains("-p1-"), first.get(0).toString());
+        assertTrue(second.get(0).getFileName().toString().contains("-p2-"), second.get(0).toString());
+    }
+
+    @Test
+    void everyPageAtOnceProducesTheSameNames(@TempDir Path directory) throws Exception {
+        // Whether the document goes through a page at a time or all at once must not change what
+        // anything is called, or the two ways of working produce different folders.
+        ConversionJob job = document(directory);
+        job.setTiling(Tiling.of(3, 1));
+        ConversionOptions options = ConversionOptions.defaults(Target.CASIO_CG, Format.CP_G3P);
+
+        Path pageByPage = directory.resolve("one-at-a-time");
+        for (int page = 1; page <= 3; page++) {
+            job.setPage(page);
+            job.convert(Format.CP_G3P, options, pageByPage);
+        }
+        Path allAtOnce = directory.resolve("all-at-once");
+        assertEquals(9, job.convertAllPages(Format.CP_G3P, options, allAtOnce).size());
+
+        assertEquals(names(pageByPage), names(allAtOnce));
+    }
+
+    private static Set<String> names(Path directory) throws IOException {
+        try (var listing = Files.list(directory)) {
+            return listing.map(path -> path.getFileName().toString()).collect(java.util.stream.Collectors.toSet());
+        }
     }
 
     @Test
