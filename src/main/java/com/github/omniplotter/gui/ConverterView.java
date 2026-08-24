@@ -38,8 +38,6 @@ import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
-import javafx.scene.control.MenuButton;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
@@ -189,7 +187,16 @@ public class ConverterView extends StackPane {
      * <p>A SplitMenuButton would read better and cannot be the window's default button, so Enter
      * would stop converting. This keeps that and puts the arrow next to it.
      */
-    private final MenuButton convertMore = new MenuButton();
+    private final Button convertMore = new Button();
+    /**
+     * The convert menu, as a panel inside this window rather than a popup.
+     *
+     * <p>A {@code ContextMenu} is a window of its own, and every attempt to make a second click on
+     * the arrow close it came down to which of two windows sees that click first — which is not
+     * something to build on, and twice was not what it appeared to be. In the scene there is one
+     * event path, and this code is the only thing on it.
+     */
+    private final VBox convertMenu = new VBox();
 
     private Path outputDir =
         Settings.getDirectory(Settings.OUTPUT_DIR, Path.of(System.getProperty("user.home"), "Desktop"));
@@ -227,7 +234,9 @@ public class ConverterView extends StackPane {
         BorderPane.setMargin(settingsBox, new Insets(GAP, GAP, GAP, GAP));
         BorderPane.setMargin(dock, new Insets(0, GAP, GAP, GAP));
 
-        getChildren().addAll(backdrop, content, dropOverlay);
+        // Above the content and below the drop target: it belongs to the action bar, and a file
+        // being dragged in should still cover everything.
+        getChildren().addAll(backdrop, content, convertMenu, dropOverlay);
         surfaces = new Node[] { queueBox, sourcePane, previewPane, settingsBox, dock };
 
         // Restored without animation: a fold the user made last week is not news to play back.
@@ -243,6 +252,8 @@ public class ConverterView extends StackPane {
 
         restoreSelection();
         updateOutputLabel();
+        // The queue starts empty, so the arrow starts hidden and Convert starts round.
+        updateConvertMenu();
         checkForUpdate();
     }
 
@@ -1038,14 +1049,43 @@ public class ConverterView extends StackPane {
         progress.setMaxSize(38, 38);
 
         convertButton.setDefaultButton(true);
-        convertButton.getStyleClass().addAll(Styles.ACCENT, "hero");
+        convertButton.getStyleClass().addAll(Styles.ACCENT, "hero", "split-left");
         convertButton.setGraphic(new FontIcon(Feather.DOWNLOAD));
         convertButton.setOnAction(e -> convertAll(false));
 
-        MenuItem everyPage = new MenuItem("Convert every page");
-        everyPage.setOnAction(e -> convertAll(true));
-        convertMore.getItems().add(everyPage);
-        convertMore.getStyleClass().addAll(Styles.ACCENT, "hero");
+        Button everyPage = new Button("Convert every page");
+        everyPage.getStyleClass().add(Styles.FLAT);
+        everyPage.setMaxWidth(Double.MAX_VALUE);
+        everyPage.setAlignment(Pos.CENTER_LEFT);
+        everyPage.setOnAction(e -> {
+            showConvertMenu(false);
+            convertAll(true);
+        });
+
+        convertMenu.getChildren().add(everyPage);
+        convertMenu.getStyleClass().add("floating-menu");
+        convertMenu.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        convertMenu.setVisible(false);
+        convertMenu.setManaged(false);
+        StackPane.setAlignment(convertMenu, Pos.TOP_LEFT);
+
+        // Pointing where the menu will appear, which is above the button: up while it is closed,
+        // and turned over to point back down while it is open.
+        FontIcon arrow = new FontIcon(Feather.CHEVRON_UP);
+        convertMore.setGraphic(arrow);
+        convertMore.setOnAction(e -> showConvertMenu(!convertMenu.isVisible()));
+        convertMenu.visibleProperty().addListener((o, was, now) -> arrow.setRotate(now ? 180 : 0));
+
+        // One path, and this is all of it: the arrow toggles, anything else in the window closes.
+        addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+            if (convertMenu.isVisible()
+                && !inside(convertMore, e.getSceneX(), e.getSceneY())
+                && !inside(convertMenu, e.getSceneX(), e.getSceneY())) {
+                showConvertMenu(false);
+            }
+        });
+
+        convertMore.getStyleClass().addAll(Styles.ACCENT, "hero", "split-right");
         convertMore.setTooltip(new Tooltip("Other ways to convert"));
         // Only for documents: on a queue of photographs there is no second way to do it.
         convertMore.setVisible(false);
@@ -1054,9 +1094,15 @@ public class ConverterView extends StackPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        // The two halves are one control, so they are laid out as one: no gap between them, a
+        // radius each on its outer side only, and the glow carried by the group rather than by
+        // each half, which would otherwise show as two shadows meeting in the middle.
+        HBox convertGroup = new HBox(convertButton, convertMore);
+        convertGroup.getStyleClass().add("split-button");
+        convertGroup.setAlignment(Pos.CENTER_LEFT);
+
         HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
-            terminal, logs, theme, convertButton, convertMore);
-        HBox.setMargin(convertMore, new Insets(0, 0, 0, -8));
+            terminal, logs, theme, convertGroup);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10, 14, 10, 16));
         bar.getStyleClass().add("dock");
@@ -1395,11 +1441,58 @@ public class ConverterView extends StackPane {
         return seen.size();
     }
 
+    /**
+     * Opens or closes the convert menu, putting it just above the arrow that owns it.
+     *
+     * <p>Placed at show time from the arrow's own position, so it follows the button as the window
+     * is resized instead of being pinned to a guess about how tall the action bar is.
+     */
+    private void showConvertMenu(boolean show) {
+        convertMenu.setVisible(show);
+        convertMenu.setManaged(show);
+        if (show) {
+            requestLayout();
+        }
+    }
+
+    /**
+     * Puts the convert menu just above the arrow that owns it.
+     *
+     * <p>Done here, after the layout pass, and not when it is opened. Measuring it at that moment
+     * asks for a size it may not have been given yet, and a height that comes back too small puts
+     * the panel over the button instead of above it — where it swallows the very click meant to
+     * close it, which is why the arrow sometimes worked and sometimes did nothing.
+     *
+     * <p>Running every pass also means it follows the button when the window is resized.
+     */
+    @Override
+    protected void layoutChildren() {
+        super.layoutChildren();
+        if (!convertMenu.isVisible()) {
+            return;
+        }
+        var arrow = sceneToLocal(convertMore.localToScene(convertMore.getBoundsInLocal()));
+        convertMenu.setTranslateX(Math.max(8, arrow.getMaxX() - convertMenu.getWidth()));
+        convertMenu.setTranslateY(arrow.getMinY() - convertMenu.getHeight() - 8);
+    }
+
+    /** Whether a point in scene coordinates is over this node. */
+    private static boolean inside(Node node, double sceneX, double sceneY) {
+        return node.isVisible() && node.localToScene(node.getBoundsInLocal())
+            .contains(sceneX, sceneY);
+    }
+
     /** Whether anything in the queue has more than one page, and so a second way to convert. */
     private void updateConvertMenu() {
         boolean anyDocument = jobs.stream().anyMatch(job -> job.pageCount() > 1);
         convertMore.setVisible(anyDocument);
         convertMore.setManaged(anyDocument);
+        // Without its other half, Convert is a button again and has to be shaped like one: the
+        // split radius left a flat edge on the side the arrow used to be.
+        convertButton.getStyleClass().remove("split-left");
+        if (anyDocument) {
+            convertButton.getStyleClass().add("split-left");
+        }
     }
 
     private void convertAll(boolean everyPage) {

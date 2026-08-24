@@ -359,3 +359,58 @@
     -fx-icon-size: 32px;
     -fx-icon-color: -color-fg-muted;
 }
+
+/* --- the convert control ---------------------------------------------------------------- */
+
+/*
+ * Convert and its menu are one control with a seam, not two buttons that happen to be adjacent.
+ * The glow belongs to the group: on the halves it drew twice and the two shadows met in the
+ * middle, which is exactly the join the shape is trying to hide.
+ */
+.split-button {
+    -fx-effect: dropshadow(gaussian, -op-accent-glow, 16, 0.0, 0, 4);
+}
+
+.split-button:hover {
+    -fx-effect: dropshadow(gaussian, -op-accent-glow, 22, 0.0, 0, 6);
+}
+
+.converter-view .button.hero.split-left {
+    -fx-background-radius: 10px 0 0 10px;
+    -fx-effect: null;
+}
+
+.converter-view .button.hero.split-right {
+    -fx-background-radius: 0 10px 10px 0;
+    -fx-padding: 7px 10px;
+    -fx-effect: null;
+    /* A hairline of the ground showing through, so the seam reads as a division of one surface
+       rather than as a gap between two. */
+    -fx-border-color: transparent transparent transparent rgba(0, 0, 0, 0.18);
+    -fx-border-width: 0 0 0 1px;
+}
+
+
+/*
+ * The convert menu, shaped like the surfaces it belongs to. It is a panel inside the window rather
+ * than a popup, so that a click on the arrow that opened it can be the click that closes it: with a
+ * popup that question comes down to which of two windows sees the click first.
+ */
+.floating-menu {
+    -fx-background-color: -color-bg-overlay;
+    -fx-background-radius: 12px;
+    -fx-border-color: -color-border-default;
+    -fx-border-radius: 12px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 24, 0.0, 0, 8);
+    -fx-padding: 6px;
+}
+
+.floating-menu .button {
+    -fx-background-radius: 8px;
+    -fx-padding: 7px 14px;
+}
+
+.floating-menu .button:hover {
+    -fx-background-color: -color-accent-subtle;
+}
