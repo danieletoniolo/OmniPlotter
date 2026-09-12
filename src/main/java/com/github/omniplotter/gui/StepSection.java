@@ -3,10 +3,12 @@ package com.github.omniplotter.gui;
 import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.Messages;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -29,6 +31,15 @@ import org.kordamp.ikonli.javafx.FontIcon;
 public class StepSection extends VBox {
 
     private final VBox body = new VBox(10);
+
+    /**
+     * Whether the body is away.
+     *
+     * <p>Held rather than read back off {@code body.isVisible()}. Asking the node meant the
+     * handler said {@code !isVisible()} — which reads like "toggle" and means "fold" when it is
+     * already folded, so a closed step could not be opened at all.
+     */
+    private boolean folded;
 
     public StepSection(int number, String title, String subtitle) {
         super(8);
@@ -77,12 +88,23 @@ public class StepSection extends VBox {
         HBox heading = (HBox) getChildren().get(0);
         heading.getChildren().addAll(spacer, fold);
 
-        fold.setOnAction(e -> setFolded(!body.isVisible(), fold));
+        // Through the action, so the keyboard reaches it too. The click is then stopped here:
+        // Button does not consume MOUSE_CLICKED, so it would go on to the heading below and
+        // toggle a second time, which looks exactly like nothing happening.
+        fold.setOnAction(e -> setFolded(!folded, fold));
+        fold.setOnMouseClicked(MouseEvent::consume);
+
+        // The whole heading, not just the chevron. A 20-pixel glyph is a small thing to find and
+        // a smaller one to hit, and the title beside it looks like it should work.
+        heading.setCursor(Cursor.HAND);
+        heading.setOnMouseClicked(e -> setFolded(!folded, fold));
+
         setFolded(startFolded, fold);
         return this;
     }
 
     private void setFolded(boolean folded, Button fold) {
+        this.folded = folded;
         body.setVisible(!folded);
         body.setManaged(!folded);
         // Everything between the heading and the body goes with it, which is the subtitle.
