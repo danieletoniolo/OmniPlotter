@@ -1692,10 +1692,13 @@ public class ConverterView extends StackPane {
             } else {
                 // The same refusal the command line makes: the shell's configuration is the user's,
                 // and a window is the worst place to edit it without being asked.
+                String where = outcome.shellFile()
+                    .map(file -> "Add this line to " + file + ":")
+                    .orElse("Run this once in PowerShell to add it:");
                 report(Alert.AlertType.INFORMATION, "One step left",
                     outcome.link() + " was created, but " + outcome.link().getParent()
-                        + " is not on your PATH.\n\nAdd this line to " + outcome.shellFile()
-                        + ":\n\n    " + outcome.shellLine());
+                        + " is not on your PATH.\n\n" + where
+                        + "\n\n    " + outcome.shellLine().orElseThrow());
             }
         } catch (IOException e) {
             report(Alert.AlertType.ERROR, "Could not set up the command", String.valueOf(e.getMessage()));

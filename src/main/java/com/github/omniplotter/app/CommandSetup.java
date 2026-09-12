@@ -31,8 +31,15 @@ public final class CommandSetup {
      */
     public static final String CONSOLE_COMMAND = "omniplotter-cli";
 
-    /** What a run of {@link #install} did, so the caller can report it and say what remains. */
-    public record Outcome(Path link, boolean created, boolean onPath, String shellLine, Path shellFile) {}
+    /**
+     * What a run of {@link #install} did, so the caller can report it and say what remains.
+     *
+     * @param shellLine the line that would put the link on PATH, absent when it already is
+     * @param shellFile the startup file that line belongs in — absent on Windows, where there is no
+     *                  such file and the line is a command to run once instead
+     */
+    public record Outcome(Path link, boolean created, boolean onPath,
+                          Optional<String> shellLine, Optional<Path> shellFile) {}
 
     /**
      * The running executable.
@@ -125,8 +132,8 @@ public final class CommandSetup {
 
         boolean onPath = isOnPath(link.getParent());
         return new Outcome(link, true, onPath,
-            onPath ? null : shellLine(link.getParent()),
-            onPath ? null : shellFile());
+            onPath ? Optional.empty() : Optional.of(shellLine(link.getParent())),
+            onPath ? Optional.empty() : shellFile());
     }
 
     public static boolean uninstall() throws IOException {
@@ -175,39 +182,66 @@ public final class CommandSetup {
         return Optional.empty();
     }
 
-    /** The line that would put {@code directory} on PATH, for the user to approve. */
+    /**
+     * The line that would put {@code directory} on PATH, for the user to approve.
+     *
+     * <p>Read from the same place as {@link #shellFile()}, so the two cannot disagree: fish has no
+     * {@code export}, and bash syntax written into {@code config.fish} is a line that looks right
+     * and silently does nothing.
+     */
     public static String shellLine(Path directory) {
+        return shellLine(directory, shellName());
+    }
+
+    /** The same for a named shell, so each syntax can be checked without that shell installed. */
+    public static String shellLine(Path directory, String shell) {
         if (AppPaths.isWindows()) {
             return "[Environment]::SetEnvironmentVariable('Path', "
                 + "[Environment]::GetEnvironmentVariable('Path', 'User') + ';" + directory + "', 'User')";
+        }
+        if ("fish".equals(shell)) {
+            return "fish_add_path " + directory;
         }
         return "export PATH=\"" + directory + ":$PATH\"";
     }
 
     /**
-     * The startup file the line belongs in.
+     * The startup file the line belongs in, and nothing on Windows.
      *
      * <p>Read from {@code SHELL} rather than assumed: macOS defaults to zsh and most Linux
      * distributions to bash, and writing to the wrong one looks like the command silently not
-     * working.
+     * working. Windows has no such file at all — its line is a command run once — and returning
+     * nothing says so where a null used to be printed as the word "null".
      */
-    public static Path shellFile() {
+    public static Optional<Path> shellFile() {
+        return shellFile(shellName());
+    }
+
+    /** The same for a named shell. */
+    public static Optional<Path> shellFile(String shell) {
         if (AppPaths.isWindows()) {
-            return null;
+            return Optional.empty();
         }
-        String shell = System.getenv("SHELL");
-        String name = shell == null ? "" : Path.of(shell).getFileName().toString();
         Path home = Path.of(System.getProperty("user.home"));
-        return switch (name) {
+        return Optional.of(switch (shell) {
             case "zsh" -> home.resolve(".zshrc");
             case "fish" -> home.resolve(".config").resolve("fish").resolve("config.fish");
             default -> home.resolve(".bashrc");
-        };
+        });
+    }
+
+    /** The shell the user is in, as its bare name, or empty when the environment does not say. */
+    public static String shellName() {
+        String shell = System.getenv("SHELL");
+        return shell == null ? "" : Path.of(shell).getFileName().toString();
     }
 
     /** Appends the line to the startup file, having been told to. */
     public static void addToShellFile(Path file, String line) throws IOException {
-        Files.createDirectories(file.getParent());
+        Path parent = file.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         List<String> existing = Files.exists(file) ? Files.readAllLines(file) : new ArrayList<>();
         if (existing.stream().anyMatch(l -> l.trim().equals(line.trim()))) {
             return;

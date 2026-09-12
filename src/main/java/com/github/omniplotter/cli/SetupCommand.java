@@ -56,11 +56,24 @@ public class SetupCommand implements Callable<Integer> {
             return 0;
         }
 
+        String line = outcome.shellLine().orElseThrow();
+        Optional<Path> file = outcome.shellFile();
+
         System.out.println();
         System.out.println(outcome.link().getParent() + " is not on your PATH.");
-        System.out.println("This line would add it, in " + outcome.shellFile() + ":");
+
+        if (file.isEmpty()) {
+            // Windows keeps the user's PATH in the registry rather than in a file a line can be
+            // appended to, so there is nothing here to offer to edit.
+            System.out.println("Run this once in PowerShell to add it:");
+            System.out.println();
+            System.out.println("    " + line);
+            return 0;
+        }
+
+        System.out.println("This line would add it, in " + file.get() + ":");
         System.out.println();
-        System.out.println("    " + outcome.shellLine());
+        System.out.println("    " + line);
         System.out.println();
 
         if (!confirm("Add it? [y/N] ")) {
@@ -68,7 +81,7 @@ public class SetupCommand implements Callable<Integer> {
             return 0;
         }
 
-        CommandSetup.addToShellFile(outcome.shellFile(), outcome.shellLine());
+        CommandSetup.addToShellFile(file.get(), line);
         System.out.println("Added. Open a new terminal and run 'omniplotter --help'.");
         return 0;
     }
@@ -86,7 +99,7 @@ public class SetupCommand implements Callable<Integer> {
                 System.out.println("Wrote completions to " + file + ".");
                 // zsh reads bash completions only after bashcompinit, which it does not do by
                 // default, so the two lines are worth printing rather than assuming.
-                if ("zsh".equals(shellName())) {
+                if ("zsh".equals(CommandSetup.shellName())) {
                     System.out.println("For zsh, add to ~/.zshrc:");
                     System.out.println("    autoload -U +X bashcompinit && bashcompinit");
                     System.out.println("    source " + file);
@@ -97,11 +110,6 @@ public class SetupCommand implements Callable<Integer> {
             // actually put the command on PATH.
             System.out.println("Could not write completions: " + e.getMessage());
         }
-    }
-
-    private static String shellName() {
-        String shell = System.getenv("SHELL");
-        return shell == null ? "" : Path.of(shell).getFileName().toString();
     }
 
     private Integer remove() throws IOException {
