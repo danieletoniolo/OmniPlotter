@@ -750,8 +750,7 @@ public class ConverterView extends StackPane {
                 slider(Messages.get("image.sharpen"), sharpen),
                 fill,
                 cropRow,
-                cropBlocked)
-            .foldable(true);
+                cropBlocked);
     }
 
     /**

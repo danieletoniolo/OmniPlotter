@@ -62,10 +62,11 @@ public class StepSection extends HBox {
     private Label says;
     private Label because;
 
-    private Button fold;
+    /** Every step that applies carries one, which is what says they open and close at all. */
+    private final Button chevron = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
 
     /** Which of the parts above are on screen. Kept out of the nodes so it can be tested. */
-    private final StepState state = new StepState(false);
+    private final StepState state = new StepState(true);
 
     public StepSection(int number, String titleText, String subtitle) {
         super(10);
@@ -86,15 +87,22 @@ public class StepSection extends HBox {
         title.setText(titleText);
         title.getStyleClass().add("step-title");
 
-        heading = new HBox(8, title);
+        chevron.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
+        // Through the action, so the keyboard reaches it too. The click is then stopped here:
+        // Button does not consume MOUSE_CLICKED, so it would go on to the heading below and
+        // toggle a second time, which looks exactly like nothing happening.
+        chevron.setOnAction(e -> setExpanded(!state.isExpanded()));
+        chevron.setOnMouseClicked(MouseEvent::consume);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        heading = new HBox(8, title, spacer, chevron);
         heading.setAlignment(Pos.CENTER_LEFT);
         heading.getStyleClass().add("step-heading");
         // The whole heading, not just the chevron: a 20-pixel glyph is a small thing to find and
         // a smaller one to hit. The cursor follows what a click would actually do.
-        heading.setOnMouseClicked(e -> {
-            state.toggleFold();
-            apply();
-        });
+        heading.setOnMouseClicked(e -> setExpanded(!state.isExpanded()));
 
         content.getChildren().add(heading);
         if (subtitle != null) {
@@ -113,35 +121,6 @@ public class StepSection extends HBox {
 
     public StepSection with(Node... controls) {
         body.getChildren().addAll(controls);
-        return this;
-    }
-
-    /**
-     * Adds the chevron that folds this step away.
-     *
-     * <p>Only for a step nothing breaks without — the picture adjustments, which most conversions
-     * leave alone. A step that has to be filled in is not one to hide.
-     */
-    public StepSection foldable(boolean startFolded) {
-        fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
-        fold.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
-        // Through the action, so the keyboard reaches it too. The click is then stopped here:
-        // Button does not consume MOUSE_CLICKED, so it would go on to the heading and toggle a
-        // second time, which looks exactly like nothing happening.
-        fold.setOnAction(e -> {
-            state.toggleFold();
-            apply();
-        });
-        fold.setOnMouseClicked(MouseEvent::consume);
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        heading.getChildren().addAll(spacer, fold);
-
-        if (startFolded != state.isFolded()) {
-            state.toggleFold();
-        }
-        apply();
         return this;
     }
 
@@ -167,6 +146,15 @@ public class StepSection extends HBox {
         return state.isWaiting();
     }
 
+    public boolean isExpanded() {
+        return state.isExpanded();
+    }
+
+    public void setExpanded(boolean open) {
+        state.setExpanded(open);
+        apply();
+    }
+
     /** One place where the state decides what is on screen. */
     private void apply() {
         show(body, state.bodyShown());
@@ -188,14 +176,12 @@ public class StepSection extends HBox {
             badge.getStyleClass().add("waiting");
         }
 
-        heading.setCursor(state.clickable() && fold != null ? Cursor.HAND : Cursor.DEFAULT);
+        heading.setCursor(state.clickable() ? Cursor.HAND : Cursor.DEFAULT);
 
-        if (fold != null) {
-            show(fold, state.chevronShown());
-            boolean folded = state.isFolded();
-            fold.setGraphic(new FontIcon(folded ? Feather.CHEVRON_DOWN : Feather.CHEVRON_UP));
-            fold.setTooltip(new Tooltip(Messages.get(folded ? "step.show" : "step.hide")));
-        }
+        show(chevron, state.chevronShown());
+        boolean open = state.isExpanded();
+        chevron.setGraphic(new FontIcon(open ? Feather.CHEVRON_DOWN : Feather.CHEVRON_RIGHT));
+        chevron.setTooltip(new Tooltip(Messages.get(open ? "step.hide" : "step.show")));
     }
 
     private static void show(Node node, boolean visible) {
