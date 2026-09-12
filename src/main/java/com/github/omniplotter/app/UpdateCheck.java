@@ -70,7 +70,14 @@ public final class UpdateCheck {
             return Optional.empty();
         }
         Version version = Version.parse(location.substring(tag + "/tag/".length()));
-        return version == null ? Optional.empty() : Optional.of(new Result(version, location));
+        if (version == null) {
+            // Not the same answer as "no releases", and worth saying so: a tagging scheme that
+            // stopped starting with a number would make every future release invisible, with
+            // nothing anywhere to point at.
+            LOG.log(Level.INFO, "Ignoring a release tag that is not a version: " + location);
+            return Optional.empty();
+        }
+        return Optional.of(new Result(version, location));
     }
 
     /** The latest release if it is newer than what is running, and nothing otherwise. */
@@ -91,15 +98,22 @@ public final class UpdateCheck {
         }
         Thread thread = new Thread(() -> {
             try {
+                Optional<Result> update = fetchIfNewer();
+
+                // Recorded once there is an answer, and not before. Written first, a check that
+                // failed because the machine was offline at launch used up the day with it, and
+                // relaunching an hour later on a working network asked nothing.
                 Settings.setLong(Settings.UPDATE_LAST_CHECK, System.currentTimeMillis());
                 Settings.save();
-                fetchIfNewer()
-                    .filter(result -> !result.latest().toString()
+
+                update.filter(result -> !result.latest().toString()
                         .equals(Settings.get(Settings.UPDATE_SKIPPED, "")))
                     .ifPresent(onUpdate);
             } catch (IOException | InterruptedException | RuntimeException e) {
-                // Being offline is the normal case here, not an error worth showing anyone.
-                LOG.log(Level.FINE, "Update check did not complete", e);
+                // Being offline is the normal case here, so nobody is told. It is still written
+                // down: a check that can never succeed looks exactly like one that found nothing,
+                // and FINE is below the level the log file keeps.
+                LOG.log(Level.INFO, "Update check did not complete against " + base() + ": " + e);
             }
         }, "update-check");
         thread.setDaemon(true);

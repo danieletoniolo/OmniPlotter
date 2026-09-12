@@ -36,10 +36,21 @@ class UpdateCheckTest {
 
     /** Answers /releases/latest with the redirect GitHub sends, pointing at {@code location}. */
     private void serveRedirect(String location) throws IOException {
+        serve(302, location);
+    }
+
+    /** Answers with a status and no Location at all, which is what a private repository does. */
+    private void serveStatus(int status) throws IOException {
+        serve(status, null);
+    }
+
+    private void serve(int status, String location) throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
-            exchange.getResponseHeaders().add("Location", location);
-            exchange.sendResponseHeaders(302, -1);
+            if (location != null) {
+                exchange.getResponseHeaders().add("Location", location);
+            }
+            exchange.sendResponseHeaders(status, -1);
             exchange.close();
         });
         server.start();
@@ -62,6 +73,23 @@ class UpdateCheckTest {
     void reportsNothingWhenNoReleaseHasBeenPublished() throws Exception {
         // With no releases the redirect lands on the releases page, which carries no tag.
         serveRedirect("https://github.com/danieletoniolo/OmniPlotter/releases");
+
+        assertTrue(UpdateCheck.fetchLatest().isEmpty());
+    }
+
+    @Test
+    void reportsNothingWhenTheRepositoryRefusesToSay() throws Exception {
+        // A private repository answers 404 with no Location to read. That has to come back empty
+        // rather than as an exception, and it is why the window stays silent before a repository
+        // is made public.
+        serveStatus(404);
+
+        assertTrue(UpdateCheck.fetchLatest().isEmpty());
+    }
+
+    @Test
+    void reportsNothingWhenTheTagIsNotAVersion() throws Exception {
+        serveRedirect("https://github.com/danieletoniolo/OmniPlotter/releases/tag/nightly");
 
         assertTrue(UpdateCheck.fetchLatest().isEmpty());
     }
