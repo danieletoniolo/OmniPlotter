@@ -42,6 +42,9 @@ public class HelpOverlay extends Pane {
 
     private static final double CARD_WIDTH = 340;
 
+    /** Reserved for the scroll bar, showing or not. See the note on ConverterView.SCROLLBAR. */
+    private static final double SCROLLBAR = 8;
+
     /** One stop on the tour: a region of the window, and the key for what it is for. */
     public record Spot(Node target, String key) {}
 
@@ -59,6 +62,9 @@ public class HelpOverlay extends Pane {
 
     private final ScrollPane concepts;
 
+    /** Held so its width can be pinned when the panel is placed, rather than fitted to the pane. */
+    private final VBox conceptsBody;
+
     private int at = -1;
 
     /** The hole last cut, so a layout pass that changed nothing does not cut it again. */
@@ -69,7 +75,13 @@ public class HelpOverlay extends Pane {
 
         veil.getStyleClass().add("help-veil");
         buildCard();
-        concepts = buildConcepts(footer);
+
+        conceptsBody = buildConceptsBody(footer);
+        concepts = new ScrollPane(conceptsBody);
+        concepts.getStyleClass().addAll("glass", "help-panel");
+        concepts.setFitToWidth(false);
+        concepts.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        concepts.setVisible(false);
 
         // Positioned by hand in layoutChildren, so the Pane must not also have an opinion.
         for (Node child : new Node[] {veil, card, concepts}) {
@@ -161,7 +173,7 @@ public class HelpOverlay extends Pane {
 
     // --- the concepts -----------------------------------------------------------------------
 
-    private ScrollPane buildConcepts(Node footer) {
+    private VBox buildConceptsBody(Node footer) {
         Label title = new Label(Messages.get("help.concepts"));
         title.getStyleClass().add(Styles.TITLE_4);
 
@@ -187,13 +199,7 @@ public class HelpOverlay extends Pane {
         close.getStyleClass().add(Styles.FLAT);
         close.setOnAction(e -> hide());
         body.getChildren().addAll(footer, close);
-
-        ScrollPane scroll = new ScrollPane(body);
-        scroll.getStyleClass().addAll("glass", "help-panel");
-        scroll.setFitToWidth(true);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setVisible(false);
-        return scroll;
+        return body;
     }
 
     public void showConcepts() {
@@ -282,6 +288,16 @@ public class HelpOverlay extends Pane {
     private void placeConcepts(double width, double height) {
         double w = Math.min(540, width - 4 * GAP);
         double h = Math.min(600, height - 4 * GAP);
+
+        // Pinned to the width the panel is about to get, less the bar's gutter. Fitted to the pane
+        // instead, the wrapped paragraphs in here re-wrapped whenever the bar came and went, which
+        // changed their height, which decided whether the bar was needed: the same shake the
+        // output panel had.
+        double content = w - SCROLLBAR;
+        conceptsBody.setMinWidth(content);
+        conceptsBody.setPrefWidth(content);
+        conceptsBody.setMaxWidth(content);
+
         concepts.resizeRelocate((width - w) / 2, (height - h) / 2, w, h);
     }
 

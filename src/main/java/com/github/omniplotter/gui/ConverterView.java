@@ -98,6 +98,23 @@ public class ConverterView extends StackPane {
     /** Space between the floating surfaces, and between them and the window edge. */
     private static final double GAP = 14;
 
+    /** The output panel, open. */
+    private static final double SETTINGS_WIDTH = 300;
+
+    /** Inside every panel. */
+    private static final double PANEL_PADDING = 16;
+
+    /**
+     * The width the theme gives a vertical scroll bar, reserved whether one is showing or not.
+     *
+     * <p>Not a cosmetic margin. With {@code fitToWidth}, the content width *is* the viewport width,
+     * so a bar appearing took eight pixels off the width every wrap-text label wraps at — which
+     * added a line, which made the content taller, which is what decided whether the bar was needed
+     * in the first place. The panel shook under the pointer because every hover forced another
+     * layout pass through that loop.
+     */
+    private static final double SCROLLBAR = 8;
+
     /** What to type first, once the command is on PATH. */
     private static final String HELP = CommandSetup.COMMAND + " --help";
 
@@ -563,14 +580,22 @@ public class ConverterView extends StackPane {
                 .with(field(Messages.get("settings.name"), onCalcName),
                     field(Messages.get("settings.slot"), onCalcNumber),
                     onCalcHint));
-        panel.setPadding(new Insets(16));
+        panel.setPadding(new Insets(PANEL_PADDING));
+
+        // Fixed rather than fitted, so nothing the scroll bar does can change where the text
+        // wraps. Min and max as well as pref: left to ask for its own width, a column of wrapped
+        // labels asks to be one long line, and the horizontal policy would then clip it.
+        double content = SETTINGS_WIDTH - SCROLLBAR;
+        panel.setMinWidth(content);
+        panel.setPrefWidth(content);
+        panel.setMaxWidth(content);
 
         ScrollPane scroll = new ScrollPane(panel);
         scroll.getStyleClass().add("settings-scroll");
-        scroll.setFitToWidth(true);
+        scroll.setFitToWidth(false);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
-        settingsSide = new SidePanel(scroll, settingsRail(), 300, Pos.TOP_RIGHT);
+        settingsSide = new SidePanel(scroll, settingsRail(), SETTINGS_WIDTH, Pos.TOP_RIGHT);
         return settingsSide;
     }
 
