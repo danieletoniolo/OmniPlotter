@@ -459,12 +459,14 @@
     -fx-background-color: -color-accent-emphasis;
     -fx-text-fill: -color-fg-emphasis;
     -fx-background-radius: 999px;
-    -fx-min-width: 20px;
-    -fx-min-height: 20px;
     -fx-alignment: center;
     -fx-font-size: 0.78em;
     -fx-font-weight: bold;
-    -fx-padding: 0;
+    /* Padding *and* a floor, so the circle is round for one digit and still has room inside it.
+       It was a 20px floor with no padding at all, which left a bold digit nothing to spare. */
+    -fx-padding: 2px 6px;
+    -fx-min-width: 22px;
+    -fx-min-height: 22px;
 }
 
 .step-title {
@@ -531,4 +533,30 @@
 .help-panel > .scroll-bar > .decrement-button {
     -fx-padding: 0;
     -fx-opacity: 0;
+}
+
+/* --- how text is measured and drawn ------------------------------------------------------ */
+
+/*
+ * Two rules the Primer theme sets on every Text node in the window, put back. They are the reason
+ * bold text looked condensed and looked cut:
+ *
+ *   .text { -fx-font-smoothing-type: gray; -fx-bounds-type: logical_vertical_center; }
+ *
+ * `gray` turns off subpixel antialiasing. JavaFX does no stem darkening to compensate, so on macOS
+ * the result reads lighter and narrower than every native control beside it, and the heavier cuts
+ * suffer most: thin strokes at small sizes drop out rather than thinning.
+ *
+ * `logical_vertical_center` measures a Text node by the sum of its advance widths, centred on the
+ * line, instead of by where its ink is. A heavy glyph overhangs its advance box, so what is
+ * measured short gets cut — the top of a capital O, the tail of a g. `logical` is the generous one
+ * of the three: full advances, and the font's own ascent and descent rather than a centred slice.
+ *
+ * Global on purpose. This is the window's typography, not one label's, and the theme sets it
+ * globally too. It does move every label's measured height by a pixel or so, which is the thing to
+ * look at after changing it.
+ */
+.text {
+    -fx-font-smoothing-type: lcd;
+    -fx-bounds-type: logical;
 }
