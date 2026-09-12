@@ -24,6 +24,7 @@ import com.github.omniplotter.engine.data.Mode;
 import com.github.omniplotter.engine.data.OnCalcName;
 import com.github.omniplotter.engine.data.OutputLimits;
 import com.github.omniplotter.engine.data.Target;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -31,6 +32,7 @@ import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -41,9 +43,11 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.ToggleButton;
@@ -64,6 +68,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 
@@ -202,6 +207,10 @@ public class ConverterView extends StackPane {
      * would stop converting. This keeps that and puts the arrow next to it.
      */
     private final Button convertMore = new Button();
+    /** The other way, kept as a field because what it offers says how many pages. */
+    private final Button everyPage = new Button();
+    /** Puts the queue state back after a result has had its moment. */
+    private PauseTransition statusRevert;
     /**
      * The convert menu, as a panel inside this window rather than a popup.
      *
@@ -934,7 +943,7 @@ public class ConverterView extends StackPane {
         int cells = job.excludedTiles().size();
         int pages = job.applyExclusionsToAllPages();
         // Said out loud: it changed pages that are not on screen, so nothing else would show it.
-        status.setText(cells == 0
+        announce(cells == 0
             ? Messages.get("tiles.allIncluded", pages)
             : Messages.plural("tiles.switchedOff", cells, pages));
     }
@@ -1071,8 +1080,21 @@ public class ConverterView extends StackPane {
             OmniPlotterApp.Theme::toggle);
         theme.getStyleClass().add(Styles.FLAT);
 
-        // A moving background is a running repaint, which not everyone wants on a laptop. It is
-        // parked on the theme button because that is already where the look of the window is set.
+        // Everything that is not part of converting something, behind one labelled menu. As
+        // four unlabelled glyphs in a row, the terminal setup in particular was a thing you had
+        // to hover over to discover — and it is the only hint in the window that this application
+        // is also a command line.
+        Button more = iconButton(Feather.MORE_HORIZONTAL, Messages.get("dock.more"), () -> {});
+        more.getStyleClass().add(Styles.FLAT);
+
+        MenuItem logs = new MenuItem(Messages.get("dock.logs"), new FontIcon(Feather.FILE_TEXT));
+        logs.setOnAction(e -> Desktops.openFolder(AppPaths.logs()));
+
+        MenuItem terminal = new MenuItem(Messages.get("dock.terminal"), new FontIcon(Feather.TERMINAL));
+        terminal.setOnAction(e -> setUpCommand());
+
+        // A moving background is a running repaint, which not everyone wants on a laptop. It
+        // was reachable only by right-clicking the moon, which is not somewhere anyone looks.
         CheckMenuItem animated = new CheckMenuItem(Messages.get("dock.animated"));
         animated.setSelected(Settings.getBoolean(Settings.UI_AURORA, true));
         animated.setOnAction(e -> {
@@ -1080,18 +1102,10 @@ public class ConverterView extends StackPane {
             Settings.save();
             backdrop.setEnabled(animated.isSelected());
         });
-        theme.setContextMenu(new ContextMenu(animated));
 
-        // The window logs where its user cannot see it, so the way to that file has to be in the
-        // window itself — otherwise a bug report can only say that something did not work.
-        Button logs = iconButton(Feather.FILE_TEXT, Messages.get("dock.logs"),
-            () -> Desktops.openFolder(AppPaths.logs()));
-        logs.getStyleClass().add(Styles.FLAT);
-
-        // Whoever installed a .dmg and never opens a terminal is exactly the person who would not
-        // find out from anywhere else that this application is also a command line.
-        Button terminal = iconButton(Feather.TERMINAL, Messages.get("dock.terminal"), this::setUpCommand);
-        terminal.getStyleClass().add(Styles.FLAT);
+        ContextMenu menu = new ContextMenu(terminal, logs, new SeparatorMenuItem(), animated);
+        // Set here rather than at construction: the handler needs the button it is shown on.
+        more.setOnAction(e -> menu.show(more, Side.TOP, 0, -6));
 
         // A ring rather than a 160px bar: in a dock this narrow the bar was most of the width,
         // and the ring says the same thing in the space of a button while also reading the figure
@@ -1106,7 +1120,6 @@ public class ConverterView extends StackPane {
         convertButton.setGraphic(new FontIcon(Feather.DOWNLOAD));
         convertButton.setOnAction(e -> convertAll(false));
 
-        Button everyPage = new Button(Messages.get("dock.convert.everyPage"));
         everyPage.getStyleClass().add(Styles.FLAT);
         everyPage.setMaxWidth(Double.MAX_VALUE);
         everyPage.setAlignment(Pos.CENTER_LEFT);
@@ -1155,7 +1168,7 @@ public class ConverterView extends StackPane {
         convertGroup.setAlignment(Pos.CENTER_LEFT);
 
         HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
-            terminal, logs, theme, convertGroup);
+            theme, more, convertGroup);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10, 14, 10, 16));
         bar.getStyleClass().add("dock");
@@ -1536,9 +1549,28 @@ public class ConverterView extends StackPane {
             .contains(sceneX, sceneY);
     }
 
-    /** Whether anything in the queue has more than one page, and so a second way to convert. */
+    /**
+     * What Convert is about to do, and whether there is a second way to do it.
+     *
+     * <p>The button said "Convert" and meant "the page each of these files is showing", which is
+     * not something a button can leave to be inferred — especially next to a menu item that means
+     * the whole document.
+     */
     private void updateConvertMenu() {
         boolean anyDocument = jobs.stream().anyMatch(job -> job.pageCount() > 1);
+        int queued = jobs.size();
+
+        convertButton.setText(
+            queued == 0 ? Messages.get("dock.convert")
+                : !anyDocument ? Messages.plural("dock.convert.images", queued)
+                : queued == 1 ? Messages.get("dock.convert.page")
+                : Messages.get("dock.convert.pages"));
+
+        // The count only where it means something: with two documents queued it is two numbers.
+        everyPage.setText(queued == 1 && anyDocument
+            ? Messages.get("dock.convert.everyPage.count", jobs.get(0).pageCount())
+            : Messages.get("dock.convert.everyPage"));
+
         convertMore.setVisible(anyDocument);
         convertMore.setManaged(anyDocument);
         // Without its other half, Convert is a button again and has to be shaped like one: the
@@ -1551,7 +1583,7 @@ public class ConverterView extends StackPane {
 
     private void convertAll(boolean everyPage) {
         if (jobs.isEmpty()) {
-            status.setText(Messages.get("dock.nothing"));
+            announce(Messages.get("dock.nothing"));
             return;
         }
         Format format = formatBox.getValue();
@@ -1591,7 +1623,7 @@ public class ConverterView extends StackPane {
             convertButton.setDisable(false);
             List<String> failures = task.getValue();
             int ok = written[0];
-            status.setText(failures.isEmpty()
+            announce(failures.isEmpty()
                 ? Messages.plural("dock.written", ok, destination.getFileName())
                 : Messages.get("dock.partly", ok, failures.size(), failures.get(0)));
         });
@@ -1599,7 +1631,7 @@ public class ConverterView extends StackPane {
             progress.progressProperty().unbind();
             progress.setVisible(false);
             convertButton.setDisable(false);
-            status.setText(Messages.get("dock.failed", task.getException().getMessage()));
+            announce(Messages.get("dock.failed", task.getException().getMessage()));
         });
         Thread thread = new Thread(task, "convert");
         thread.setDaemon(true);
@@ -1941,6 +1973,23 @@ public class ConverterView extends StackPane {
 
     private void updateOutputLabel() {
         outputLabel.setText(shorten(outputDir));
+    }
+
+    /**
+     * Something that just happened, for a few seconds.
+     *
+     * <p>One label carried the queue count, every conversion result, every failure and the
+     * apply-to-all-pages confirmation, each one overwriting the last and none of them saying which
+     * kind of thing it was. A result now has its moment and then gives the label back.
+     */
+    private void announce(String text) {
+        status.setText(text);
+        if (statusRevert != null) {
+            statusRevert.stop();
+        }
+        statusRevert = new PauseTransition(Duration.seconds(6));
+        statusRevert.setOnFinished(e -> refreshStatus());
+        statusRevert.play();
     }
 
     private void refreshStatus() {
