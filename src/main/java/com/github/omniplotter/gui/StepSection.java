@@ -13,6 +13,7 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.layout.VBox;
 import javafx.scene.transform.Scale;
 import org.kordamp.ikonli.feather.Feather;
@@ -52,6 +53,9 @@ public class StepSection extends HBox {
     private final VBox content = new VBox(6);
     private final VBox body = new VBox(10);
 
+    /** Everything under the heading: what opens and closes, as one thing with one height. */
+    private final VBox collapsible = new VBox(6);
+
     /** The segment from this badge down to the next one. */
     private final Region rail = new Region();
 
@@ -66,7 +70,10 @@ public class StepSection extends HBox {
     private final Button chevron = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
 
     /** Which of the parts above are on screen. Kept out of the nodes so it can be tested. */
-    private final StepState state = new StepState(true);
+    private final StepState state = new StepState(false);
+
+    /** Told to the panel, which closes whatever else is open. One step decides for none. */
+    private Runnable onOpen = () -> { };
 
     public StepSection(int number, String titleText, String subtitle) {
         super(10);
@@ -91,7 +98,8 @@ public class StepSection extends HBox {
         // Through the action, so the keyboard reaches it too. The click is then stopped here:
         // Button does not consume MOUSE_CLICKED, so it would go on to the heading below and
         // toggle a second time, which looks exactly like nothing happening.
-        chevron.setOnAction(e -> setExpanded(!state.isExpanded()));
+        // Asking rather than doing: the panel is what knows which step is open.
+        chevron.setOnAction(e -> askToOpen());
         chevron.setOnMouseClicked(MouseEvent::consume);
 
         Region spacer = new Region();
@@ -102,21 +110,37 @@ public class StepSection extends HBox {
         heading.getStyleClass().add("step-heading");
         // The whole heading, not just the chevron: a 20-pixel glyph is a small thing to find and
         // a smaller one to hit. The cursor follows what a click would actually do.
-        heading.setOnMouseClicked(e -> setExpanded(!state.isExpanded()));
+        heading.setOnMouseClicked(e -> askToOpen());
 
-        content.getChildren().add(heading);
         if (subtitle != null) {
             says = new Label(subtitle);
             says.getStyleClass().add("step-subtitle");
             says.setWrapText(true);
-            content.getChildren().add(says);
+            collapsible.getChildren().add(says);
         }
-        content.getChildren().add(body);
+        collapsible.getChildren().add(body);
+
+        // Clipped, or the contents spill out of it on the way down. The clip goes on the box whose
+        // height is being driven, which is the same reason SidePanel puts its own on a wrapper.
+        Rectangle clip = new Rectangle();
+        clip.widthProperty().bind(collapsible.widthProperty());
+        clip.heightProperty().bind(collapsible.heightProperty());
+        collapsible.setClip(clip);
+
+        content.getChildren().addAll(heading, collapsible);
         content.setPadding(new Insets(0, 0, BELOW, 0));
         HBox.setHgrow(content, Priority.ALWAYS);
 
         getStyleClass().add("step");
         getChildren().addAll(gutter, content);
+
+        apply();
+        showCollapsible(false, false);
+    }
+
+    /** What to do when a click on this step asks for it to be the open one. */
+    public void setOnOpen(Runnable action) {
+        onOpen = action;
     }
 
     public StepSection with(Node... controls) {
@@ -129,17 +153,30 @@ public class StepSection extends HBox {
         because = new Label(text);
         because.getStyleClass().add("step-subtitle");
         because.setWrapText(true);
-        content.getChildren().add(content.getChildren().indexOf(body), because);
+        // Above the part that opens and closes, not inside it: this line is what a step says
+        // while it is shut. Located by the collapsible, since the body is no longer a child here.
+        content.getChildren().add(content.getChildren().indexOf(collapsible), because);
         apply();
         return this;
+    }
+
+    /** A step that is already open stays open; there is no gesture here that closes all five. */
+    private void askToOpen() {
+        if (!state.isExpanded() && state.clickable()) {
+            onOpen.run();
+        }
     }
 
     public void setWaiting(boolean wait) {
         if (state.isWaiting() == wait) {
             return;
         }
+        boolean wasOpen = state.isExpanded();
         state.setWaiting(wait);
         apply();
+        if (wasOpen && !state.isExpanded()) {
+            showCollapsible(false, true);
+        }
     }
 
     public boolean isWaiting() {
@@ -150,15 +187,56 @@ public class StepSection extends HBox {
         return state.isExpanded();
     }
 
-    public void setExpanded(boolean open) {
+    public void setExpanded(boolean open, boolean animate) {
+        if (state.isExpanded() == open) {
+            return;
+        }
         state.setExpanded(open);
         apply();
+        showCollapsible(state.isExpanded(), animate);
+    }
+
+    /**
+     * Opens or closes the part under the heading.
+     *
+     * <p>The height has to be measured before it can be animated to, and it has to be let go of
+     * afterwards: pinned at what it measured, a step whose contents change later — the line about
+     * the crop appearing under a grid, the tile controls arriving in step 4 — would be cut off at
+     * the height it had when it opened.
+     */
+    private void showCollapsible(boolean open, boolean animate) {
+        if (!animate) {
+            collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            show(collapsible, open);
+            return;
+        }
+        if (open) {
+            show(collapsible, true);
+            double target = collapsible.prefHeight(width());
+            collapsible.setPrefHeight(0);
+            Animations.height(collapsible, target,
+                () -> collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE));
+        } else {
+            // From where it actually is: USE_COMPUTED_SIZE is -1, and animating from that would
+            // take the whole thing away in the first frame.
+            collapsible.setPrefHeight(collapsible.getHeight());
+            Animations.height(collapsible, 0, () -> {
+                show(collapsible, false);
+                collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            });
+        }
+    }
+
+    /** What to measure the height against, before a first layout has given it one. */
+    private double width() {
+        double laid = collapsible.getWidth() > 0 ? collapsible.getWidth() : content.getWidth();
+        return laid > 0 ? laid : -1;
     }
 
     /** One place where the state decides what is on screen. */
     private void apply() {
-        show(body, state.bodyShown());
-        show(says, state.subtitleShown());
+        // The body and the line above it are inside the collapsible, which carries their
+        // visibility as its height. The reason sits outside it, since it is shown when it is shut.
         show(because, state.reasonShown());
 
         // In Java rather than in the stylesheet: the arrival animation drives this same property,

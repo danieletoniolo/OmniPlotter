@@ -179,6 +179,12 @@ public class ConverterView extends StackPane {
 
     /** Set while a recompute of the steps is already queued for the end of this gesture. */
     private boolean stepsPending;
+
+    /** The one step that is open. Exactly one, which is why no step decides this for itself. */
+    private int openStep;
+
+    /** Held so an opened step can be brought into view when the one above it is a tall one. */
+    private ScrollPane settingsScroll;
     /** Where you are in the document and in the grid, under the pair both are about. */
     private HBox previewToolbar;
     private HBox pageRow;
@@ -641,6 +647,10 @@ public class ConverterView extends StackPane {
                     onCalcHint),
         };
         steps[steps.length - 1].endRail();
+        for (int i = 0; i < steps.length; i++) {
+            int index = i;
+            steps[i].setOnOpen(() -> expandStep(index, true));
+        }
 
         // Spacing zero, and the gap between steps carried inside each one: as the parent's spacing
         // it would break the rail into pieces with a hole at every boundary.
@@ -657,12 +667,16 @@ public class ConverterView extends StackPane {
         panel.setPrefWidth(content);
         panel.setMaxWidth(content);
 
-        ScrollPane scroll = new ScrollPane(panel);
-        scroll.getStyleClass().add("settings-scroll");
-        scroll.setFitToWidth(false);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        settingsScroll = new ScrollPane(panel);
+        settingsScroll.getStyleClass().add("settings-scroll");
+        settingsScroll.setFitToWidth(false);
+        settingsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
-        settingsSide = new SidePanel(scroll, settingsRail(), SETTINGS_WIDTH, Pos.TOP_RIGHT);
+        // The first one, without animating it: this is where the panel starts, not something the
+        // user has just done.
+        expandStep(0, false);
+
+        settingsSide = new SidePanel(settingsScroll, settingsRail(), SETTINGS_WIDTH, Pos.TOP_RIGHT);
         return settingsSide;
     }
 
@@ -1166,6 +1180,46 @@ public class ConverterView extends StackPane {
         });
     }
 
+    /**
+     * Opens one step and closes the rest.
+     *
+     * <p>Both halves run at once rather than one after the other: it is one movement, and
+     * sequencing them would make the panel jump twice.
+     */
+    private void expandStep(int index, boolean animate) {
+        if (index < 0 || index >= steps.length || steps[index].isWaiting()) {
+            return;
+        }
+        for (int i = 0; i < steps.length; i++) {
+            steps[i].setExpanded(i == index, animate);
+        }
+        openStep = index;
+        if (animate) {
+            bringIntoView(steps[index]);
+        }
+    }
+
+    /**
+     * Scrolls the open step into view, once it has finished opening.
+     *
+     * <p>Only matters when the step above is tall enough to push it under the fold, which in
+     * practice means the picture controls and their five sliders. Deferred, because the position
+     * to scroll to is the one it has when everything has stopped moving.
+     */
+    private void bringIntoView(StepSection step) {
+        PauseTransition settle = new PauseTransition(Duration.millis(260));
+        settle.setOnFinished(e -> {
+            double content = step.getParent() == null ? 0 : step.getParent().getBoundsInLocal().getHeight();
+            double viewport = settingsScroll.getViewportBounds().getHeight();
+            if (content <= viewport) {
+                return;   // nothing is hidden, so nothing needs moving
+            }
+            double where = step.getBoundsInParent().getMinY() / (content - viewport);
+            settingsScroll.setVvalue(Math.max(0, Math.min(1, where)));
+        });
+        settle.play();
+    }
+
     private void applySteps() {
         if (steps.length == 0) {
             return;
@@ -1219,6 +1273,12 @@ public class ConverterView extends StackPane {
         railTo = last;
         if (anchor != null) {
             Animations.timeline(anchor, cascade);
+        }
+
+        // The open step may have just stopped applying — the queue emptied under an open step 4.
+        // Left as it was it would be a panel of settings for something the file cannot be.
+        if (!open[openStep]) {
+            expandStep(StepSequence.nearest(open, openStep), true);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.github.omniplotter.gui;
 
+import javafx.animation.Animation;
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
@@ -7,11 +8,11 @@ import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.animation.ParallelTransition;
 import javafx.animation.SequentialTransition;
-import javafx.animation.Transition;
 import javafx.animation.TranslateTransition;
 import javafx.scene.Node;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.Region;
 import javafx.util.Duration;
 
 /**
@@ -52,6 +53,9 @@ public final class Animations {
      */
     private static final Duration DRAW = Duration.millis(120);
     private static final Duration ARRIVE = Duration.millis(220);
+
+    /** One step closing while another opens. Both run at once, so this is the whole movement. */
+    private static final Duration OPEN = Duration.millis(240);
 
     /**
      * The surfaces settling into place on first show: each fades in while rising the last few
@@ -117,6 +121,25 @@ public final class Animations {
             all.getChildren().add(one);
         }
         play(anchor, all);
+    }
+
+    /**
+     * Opens or closes a region by driving its preferred height.
+     *
+     * <p>The caller measures the target and hands it over: a region that fills what is left of its
+     * parent has no height of its own to animate to, and one that has just been unhidden has not
+     * been laid out yet. It is also the caller's job to release the preferred height afterwards —
+     * left pinned at the measured value, a panel whose contents change later would be cut off at
+     * the height it happened to have when it opened.
+     */
+    public static void height(Region region, double to, Runnable after) {
+        stop(region);
+        Timeline resize = new Timeline(new KeyFrame(OPEN,
+            new KeyValue(region.prefHeightProperty(), to, Interpolator.EASE_BOTH)));
+        if (after != null) {
+            resize.setOnFinished(e -> after.run());
+        }
+        play(region, resize);
     }
 
     /**
@@ -195,13 +218,13 @@ public final class Animations {
         return move;
     }
 
-    private static void play(Node node, Transition transition) {
-        node.getProperties().put(RUNNING, transition);
-        transition.play();
+    private static void play(Node node, Animation animation) {
+        node.getProperties().put(RUNNING, animation);
+        animation.play();
     }
 
     private static void stop(Node node) {
-        if (node.getProperties().remove(RUNNING) instanceof Transition running) {
+        if (node.getProperties().remove(RUNNING) instanceof Animation running) {
             running.stop();
         }
     }
