@@ -31,12 +31,14 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
@@ -87,6 +89,9 @@ public class ConverterView extends StackPane {
 
     /** Space between the floating surfaces, and between them and the window edge. */
     private static final double GAP = 14;
+
+    /** What to type first, once the command is on PATH. */
+    private static final String HELP = CommandSetup.COMMAND + " --help";
 
     private final Stage stage;
 
@@ -1689,40 +1694,112 @@ public class ConverterView extends StackPane {
     private void setUpCommand() {
         var launcher = CommandSetup.launcher();
         if (launcher.isEmpty()) {
-            report(Alert.AlertType.INFORMATION, "Nothing to link to",
-                "This copy is running as a plain jar rather than an installed application, so there "
-                    + "is no launcher to put on your PATH.");
+            report("Nothing to link to", paragraph(
+                "This copy is running as a plain jar rather than an installed application, so "
+                    + "there is no launcher to put on your PATH. Install OmniPlotter and set the "
+                    + "command up from there."));
             return;
         }
         try {
-            CommandSetup.Outcome outcome = CommandSetup.install(CommandSetup.consoleLauncher(launcher.get()));
+            CommandSetup.Outcome outcome =
+                CommandSetup.install(CommandSetup.consoleLauncher(launcher.get()));
             if (outcome.onPath()) {
-                report(Alert.AlertType.INFORMATION, "Ready",
-                    "Open a terminal and run:\n\n    omniplotter --help");
+                report("Ready", paragraph("Open a terminal and run:"), new CommandBlock(HELP));
             } else {
-                // The same refusal the command line makes: the shell's configuration is the user's,
-                // and a window is the worst place to edit it without being asked.
-                String where = outcome.shellFile()
-                    .map(file -> "Add this line to " + file + ":")
-                    .orElse("Run this once in PowerShell to add it:");
-                report(Alert.AlertType.INFORMATION, "One step left",
-                    outcome.link() + " was created, but " + outcome.link().getParent()
-                        + " is not on your PATH.\n\n" + where
-                        + "\n\n    " + outcome.shellLine().orElseThrow());
+                report("One step left", oneStepLeft(outcome));
             }
         } catch (IOException e) {
-            report(Alert.AlertType.ERROR, "Could not set up the command", String.valueOf(e.getMessage()));
+            // A message of null is not worth showing anyone, and String.valueOf printed that word.
+            String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            report("Could not set up the command", paragraph(reason));
         }
     }
 
-    private void report(Alert.AlertType type, String header, String detail) {
-        Alert alert = new Alert(type);
-        alert.initOwner(stage);
-        alert.setTitle("Terminal command");
-        alert.setHeaderText(header);
-        alert.setContentText(detail);
-        alert.getDialogPane().setMinWidth(520);
-        alert.showAndWait();
+    /**
+     * What is left to do, and an offer to do it.
+     *
+     * <p>The command line asks {@code Add it? [y/N]} and then edits the startup file. The window
+     * used to show the same line and stop there, which left the one instruction it gave — an
+     * {@code export} of a path with a home directory in it — as something to be understood and
+     * retyped. The line is still shown, and still nobody's business but the user's; the difference
+     * is that agreeing to it is now a button.
+     */
+    private Node[] oneStepLeft(CommandSetup.Outcome outcome) {
+        String line = outcome.shellLine().orElseThrow();
+        Label what = paragraph("The command was linked into " + shorten(outcome.link().getParent())
+            + ", which your shell does not look in — so " + CommandSetup.COMMAND
+            + " will not be found there yet.");
+
+        if (outcome.shellFile().isEmpty()) {
+            // Windows keeps PATH in the registry, so there is no file to offer to edit.
+            return new Node[] {
+                what,
+                paragraph("Run this once in PowerShell to add it:"),
+                new CommandBlock(line),
+            };
+        }
+
+        Path file = outcome.shellFile().get();
+        VBox rest = new VBox(10);
+        Button add = new Button("Add it to " + shorten(file) + " for me");
+        add.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
+        add.setOnAction(e -> {
+            try {
+                CommandSetup.addToShellFile(file, line);
+                rest.getChildren().setAll(
+                    paragraph("Added to " + shorten(file) + ". Open a new terminal and run:"),
+                    new CommandBlock(HELP));
+            } catch (IOException failed) {
+                rest.getChildren().setAll(paragraph("Could not write to " + shorten(file)
+                    + ": " + failed.getMessage() + ". The line above still does it by hand."));
+            }
+        });
+        rest.getChildren().add(add);
+
+        return new Node[] {
+            what,
+            paragraph("This line adds it, at the end of " + shorten(file) + ":"),
+            new CommandBlock(line),
+            rest,
+        };
+    }
+
+    /**
+     * A dialog in the window's own styling.
+     *
+     * <p>Not an {@code Alert}: its content text is a Label, so every command the window has ever
+     * proposed was text nobody could select. This one takes nodes, which is what lets a
+     * {@link CommandBlock} carry the line instead.
+     */
+    private void report(String header, Node... body) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.initOwner(stage);
+        dialog.setTitle("Terminal command");
+        dialog.setHeaderText(header);
+
+        VBox content = new VBox(10, body);
+        content.setMaxWidth(520);
+
+        DialogPane pane = dialog.getDialogPane();
+        // A dialog is a scene of its own, so it does not inherit the window's stylesheet.
+        pane.getStylesheets().add(
+            OmniPlotterApp.class.getResource("/omniplotter.css").toExternalForm());
+        pane.setContent(content);
+        pane.setMinWidth(560);
+        pane.getButtonTypes().add(ButtonType.CLOSE);
+        dialog.showAndWait();
+    }
+
+    private static Label paragraph(String text) {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setMaxWidth(500);
+        return label;
+    }
+
+    /** A path as somebody would say it out loud, rather than with their home directory spelled out. */
+    private static String shorten(Path path) {
+        return path.toString().replace(System.getProperty("user.home"), "~");
     }
 
     // --- updates ----------------------------------------------------------------------------
@@ -1818,7 +1895,7 @@ public class ConverterView extends StackPane {
     }
 
     private void updateOutputLabel() {
-        outputLabel.setText(outputDir.toString().replace(System.getProperty("user.home"), "~"));
+        outputLabel.setText(shorten(outputDir));
     }
 
     private void refreshStatus() {
