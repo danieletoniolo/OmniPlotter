@@ -5,6 +5,7 @@ import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.AppPaths;
 import com.github.omniplotter.app.CommandSetup;
 import com.github.omniplotter.app.Desktops;
+import com.github.omniplotter.app.Messages;
 import com.github.omniplotter.app.Settings;
 import com.github.omniplotter.app.UpdateCheck;
 import com.github.omniplotter.engine.data.Adjustments;
@@ -118,8 +119,8 @@ public class ConverterView extends StackPane {
     private final Spinner<Integer> heightSpinner = new Spinner<>(1, 4096, 192);
     private final Spinner<Integer> colorsSpinner = new Spinner<>(1, 1 << 24, 65536);
     private final FlowPane presetChips = new FlowPane(6, 6);
-    private final CheckBox keepRatio = new CheckBox("Keep aspect ratio");
-    private final CheckBox enlargeSmaller = new CheckBox("Enlarge smaller images");
+    private final CheckBox keepRatio = new CheckBox(Messages.get("settings.keepRatio"));
+    private final CheckBox enlargeSmaller = new CheckBox(Messages.get("settings.enlarge"));
     private final Slider brightness = new Slider(-100, 100, 0);
     private final Slider contrast = new Slider(-100, 100, 0);
     private final Slider gamma = new Slider(0.2, 3.0, 1.0);
@@ -127,8 +128,8 @@ public class ConverterView extends StackPane {
     private final Slider sharpen = new Slider(0, 3, 0);
     private final ComboBox<Dither> ditherBox = new ComboBox<>();
     private final FlowPane lookChips = new FlowPane(6, 6);
-    private final CheckBox fill = new CheckBox("Fill the canvas");
-    private final ToggleButton cropToggle = new ToggleButton("Crop");
+    private final CheckBox fill = new CheckBox(Messages.get("image.fill"));
+    private final ToggleButton cropToggle = new ToggleButton(Messages.get("image.crop"));
     private CropOverlay cropOverlay;
     private GridOverlay gridOverlay;
 
@@ -137,9 +138,9 @@ public class ConverterView extends StackPane {
     private final Label tileLabel = new Label();
     private final Button previousTile = new Button("\u2039");
     private final Button nextTile = new Button("\u203a");
-    private final Button excludeTile = new Button("Exclude this tile");
-    private final Button includeAll = new Button("Include all");
-    private final Button applyToPages = new Button("Apply to all pages");
+    private final Button excludeTile = new Button(Messages.get("tiles.exclude"));
+    private final Button includeAll = new Button(Messages.get("tiles.includeAll"));
+    private final Button applyToPages = new Button(Messages.get("tiles.applyToPages"));
     private VBox tileControls;
     private final Label pageLabel = new Label();
     private final Button previousPage = new Button("\u2039");
@@ -178,14 +179,14 @@ public class ConverterView extends StackPane {
 
     private final ImageView sourceView = new ImageView();
     private final ImageView previewView = new ImageView();
-    private final Label sourceCaption = new Label("No image selected");
+    private final Label sourceCaption = new Label(Messages.get("preview.none"));
     private final Label previewCaption = new Label();
     private final Label sizeWarning = new Label();
 
     private final Label outputLabel = new Label();
     private final RingProgressIndicator progress = new RingProgressIndicator(0);
-    private final Label status = new Label("Drop images to begin.");
-    private final Button convertButton = new Button("Convert");
+    private final Label status = new Label(Messages.get("queue.begin"));
+    private final Button convertButton = new Button(Messages.get("dock.convert"));
     /**
      * The other way to convert, kept beside the button rather than in it.
      *
@@ -265,7 +266,7 @@ public class ConverterView extends StackPane {
     // --- queue ------------------------------------------------------------------------------
 
     private Node buildQueuePanel() {
-        Node title = sectionTitle("Images", Feather.LAYERS, Feather.CHEVRON_LEFT,
+        Node title = sectionTitle(Messages.get("queue.title"), Feather.LAYERS, Feather.CHEVRON_LEFT,
             () -> queueSide.setCollapsed(true, true));
 
         // Named so the stylesheet can clear this list without also clearing the one inside every
@@ -294,9 +295,9 @@ public class ConverterView extends StackPane {
         queue.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
 
         HBox buttons = new HBox(6,
-            iconButton(Feather.PLUS, "Add images", this::chooseFiles),
-            iconButton(Feather.MINUS, "Remove selected", this::removeSelected),
-            iconButton(Feather.TRASH_2, "Remove all", this::clearQueue));
+            iconButton(Feather.PLUS, Messages.get("queue.add"), this::chooseFiles),
+            iconButton(Feather.MINUS, Messages.get("queue.remove"), this::removeSelected),
+            iconButton(Feather.TRASH_2, Messages.get("queue.removeAll"), this::clearQueue));
 
         VBox panel = new VBox(10, title, queue, buttons);
         panel.setPadding(new Insets(16));
@@ -323,11 +324,11 @@ public class ConverterView extends StackPane {
      */
     private Node queueRail() {
         VBox rail = new VBox(10,
-            railTab(Feather.LAYERS, "Show images", () -> queueSide.setCollapsed(false, true)),
+            railTab(Feather.LAYERS, Messages.get("queue.show"), () -> queueSide.setCollapsed(false, true)),
             new Region(),
-            iconButton(Feather.PLUS, "Add images", this::chooseFiles),
-            iconButton(Feather.MINUS, "Remove selected", this::removeSelected),
-            iconButton(Feather.TRASH_2, "Remove all", this::clearQueue));
+            iconButton(Feather.PLUS, Messages.get("queue.add"), this::chooseFiles),
+            iconButton(Feather.MINUS, Messages.get("queue.remove"), this::removeSelected),
+            iconButton(Feather.TRASH_2, Messages.get("queue.removeAll"), this::clearQueue));
         VBox.setVgrow(rail.getChildren().get(1), Priority.ALWAYS);
         rail.setAlignment(Pos.TOP_CENTER);
         rail.setPadding(new Insets(14, 0, 16, 0));
@@ -337,7 +338,7 @@ public class ConverterView extends StackPane {
 
     private Node settingsRail() {
         VBox rail = new VBox(10,
-            railTab(Feather.SLIDERS, "Show output settings",
+            railTab(Feather.SLIDERS, Messages.get("settings.show"),
                 () -> settingsSide.setCollapsed(false, true)));
         rail.setAlignment(Pos.TOP_CENTER);
         rail.setPadding(new Insets(14, 0, 16, 0));
@@ -355,7 +356,7 @@ public class ConverterView extends StackPane {
     private Node dropHint() {
         // Sized from the stylesheet, not here: see the note beside .drop-hint in omniplotter.css.
         FontIcon icon = new FontIcon(Feather.UPLOAD_CLOUD);
-        Label text = new Label("Drop images here");
+        Label text = new Label(Messages.get("queue.empty"));
         text.getStyleClass().add(Styles.TEXT_MUTED);
         VBox box = new VBox(8, icon, text);
         box.setAlignment(Pos.CENTER);
@@ -391,8 +392,8 @@ public class ConverterView extends StackPane {
         StackPane overlays = new StackPane(gridOverlay, cropOverlay);
         overlays.setPickOnBounds(false);
 
-        sourcePane = previewCard("Source", sourceView, overlays, sourceCaption);
-        previewPane = previewCard("Preview", previewView, null, previewCaption, sizeWarning);
+        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays, sourceCaption);
+        previewPane = previewCard(Messages.get("preview.output"), previewView, null, previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
         // being produced. An accent edge is enough; the caption underneath already names the format.
         previewPane.getStyleClass().add("result");
@@ -442,7 +443,7 @@ public class ConverterView extends StackPane {
     private StackPane buildDropOverlay() {
         FontIcon icon = new FontIcon(Feather.UPLOAD_CLOUD);
 
-        Label text = new Label("Drop to add");
+        Label text = new Label(Messages.get("drop.here"));
         text.getStyleClass().add(Styles.TITLE_3);
 
         VBox target = new VBox(14, icon, text);
@@ -462,11 +463,11 @@ public class ConverterView extends StackPane {
     // --- settings ---------------------------------------------------------------------------
 
     private Node buildSettingsPanel() {
-        Node title = sectionTitle("Output", Feather.SLIDERS, Feather.CHEVRON_RIGHT,
+        Node title = sectionTitle(Messages.get("settings.title"), Feather.SLIDERS, Feather.CHEVRON_RIGHT,
             () -> settingsSide.setCollapsed(true, true));
 
         modeBox.setItems(FXCollections.observableArrayList(Mode.values()));
-        modeBox.setConverter(labeller(m -> m == Mode.VAR ? "Picture file" : "Python script"));
+        modeBox.setConverter(labeller(m -> Messages.get(m == Mode.VAR ? "settings.mode.picture" : "settings.mode.script")));
         modeBox.setMaxWidth(Double.MAX_VALUE);
 
         targetBox.setConverter(labeller(t -> t.getBrand().label() + " — " + t.getDisplayName()));
@@ -493,20 +494,20 @@ public class ConverterView extends StackPane {
 
         VBox panel = new VBox(12,
             title,
-            field("Mode", modeBox),
-            field("Calculator", targetBox),
-            field("Format", formatBox),
+            field(Messages.get("settings.mode"), modeBox),
+            field(Messages.get("settings.calculator"), targetBox),
+            field(Messages.get("settings.format"), formatBox),
             new Separator(),
-            field("Canvas", size),
+            field(Messages.get("settings.canvas"), size),
             presetChips,
-            field("Colours", colorsSpinner),
+            field(Messages.get("settings.colours"), colorsSpinner),
             keepRatio,
             enlargeSmaller,
             new Separator(),
             buildImageControls(),
             new Separator(),
-            field("On-calculator name", onCalcName),
-            field("Slot number", onCalcNumber),
+            field(Messages.get("settings.name"), onCalcName),
+            field(Messages.get("settings.slot"), onCalcNumber),
             onCalcHint);
         panel.setPadding(new Insets(16));
 
@@ -527,7 +528,7 @@ public class ConverterView extends StackPane {
      * format picker that every conversion does need.
      */
     private Node buildImageControls() {
-        Label heading = new Label("Image");
+        Label heading = new Label(Messages.get("image.title"));
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
         VBox body = new VBox(10);
@@ -538,12 +539,14 @@ public class ConverterView extends StackPane {
         // graphic, which it cannot do from a Runnable created before the button exists.
         Button fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
         fold.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
-        fold.setTooltip(new Tooltip("Show the image controls"));
+        fold.setTooltip(new Tooltip(Messages.get("image.show")));
         fold.setOnAction(e -> {
             boolean showing = !body.isVisible();
             body.setVisible(showing);
             body.setManaged(showing);
             fold.setGraphic(new FontIcon(showing ? Feather.CHEVRON_UP : Feather.CHEVRON_DOWN));
+            // It used to go on offering to show what was already showing.
+            fold.setTooltip(new Tooltip(Messages.get(showing ? "image.hide" : "image.show")));
         });
 
         Region spacer = new Region();
@@ -556,23 +559,22 @@ public class ConverterView extends StackPane {
         for (Look look : Look.values()) {
             Button chip = new Button(capitalise(look.id()));
             chip.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
-            chip.setTooltip(new Tooltip(look == Look.DOCUMENT
-                ? "Text and screenshots: harder contrast, no dithering"
-                : "Photographs: a little more contrast and bite"));
+            chip.setTooltip(new Tooltip(Messages.get(
+                look == Look.DOCUMENT ? "image.look.document" : "image.look.photo")));
             chip.setOnAction(e -> applyLook(look));
             lookChips.getChildren().add(chip);
         }
-        Button reset = new Button("Reset");
+        Button reset = new Button(Messages.get("image.reset"));
         reset.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
         reset.setOnAction(e -> applyAdjustments(Adjustments.NONE, Dither.AUTO));
         lookChips.getChildren().add(reset);
 
         ditherBox.setItems(FXCollections.observableArrayList(Dither.values()));
-        ditherBox.setConverter(labeller(d -> switch (d) {
-            case AUTO -> "Automatic";
-            case ON -> "On";
-            case OFF -> "Off";
-        }));
+        ditherBox.setConverter(labeller(d -> Messages.get(switch (d) {
+            case AUTO -> "image.dither.auto";
+            case ON -> "image.dither.on";
+            case OFF -> "image.dither.off";
+        })));
         ditherBox.getSelectionModel().select(Dither.AUTO);
         ditherBox.setMaxWidth(Double.MAX_VALUE);
         ditherBox.valueProperty().addListener((o, was, now) -> schedulePreview());
@@ -583,15 +585,14 @@ public class ConverterView extends StackPane {
         onSettled(saturation);
         onSettled(sharpen);
 
-        fill.setTooltip(new Tooltip(
-            "Crop the source to the canvas proportions instead of padding it with white"));
+        fill.setTooltip(new Tooltip(Messages.get("image.fill.tip")));
         fill.selectedProperty().addListener((o, was, now) -> {
             updateCropAspect();
             schedulePreview();
         });
 
         cropToggle.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
-        cropToggle.setTooltip(new Tooltip("Draw the part of the image to convert, on the source"));
+        cropToggle.setTooltip(new Tooltip(Messages.get("image.crop.tip")));
         cropToggle.selectedProperty().addListener((o, was, now) -> {
             if (!restoringCropTool) {
                 armedFor = now ? croppingJob : null;
@@ -600,7 +601,7 @@ public class ConverterView extends StackPane {
             cropOverlay.setActive(now);
         });
 
-        Button clearCrop = new Button("Clear");
+        Button clearCrop = new Button(Messages.get("image.crop.clear"));
         clearCrop.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
         clearCrop.setOnAction(e -> {
             cropOverlay.clear();
@@ -614,10 +615,11 @@ public class ConverterView extends StackPane {
         // The resolution is a property of the grid; how tall a line of type ends up is only
         // meaningful next to the size it was worked out for, so the label says which size that is
         // rather than pronouncing on whether the result is readable.
-        gridBox.setConverter(labeller(grid -> grid == null ? "Whole page, one file"
-            : grid + "  —  " + grid.count() + " tiles, " + grid.dpi() + " dpi ("
-                + String.format("%.0f", TileGrid.REFERENCE_POINTS) + " pt \u2248 "
-                + String.format("%.0f", grid.lineHeight()) + " px)"));
+        gridBox.setConverter(labeller(grid -> grid == null
+            ? Messages.get("tiles.grid.whole")
+            : Messages.get("tiles.grid.option", grid, grid.count(), grid.dpi(),
+                String.format("%.0f", TileGrid.REFERENCE_POINTS),
+                String.format("%.0f", grid.lineHeight()))));
         gridBox.valueProperty().addListener((o, was, now) -> gridSelected(now));
 
         // Stepping through the pieces, because seeing one of twelve and having to guess at the
@@ -641,9 +643,7 @@ public class ConverterView extends StackPane {
             updateTileCount();
         });
         applyToPages.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
-        applyToPages.setTooltip(new Tooltip(
-            "Give every page of this document exactly what this one has, replacing whatever they "
-                + "had — including putting them all back when nothing here is switched off"));
+        applyToPages.setTooltip(new Tooltip(Messages.get("tiles.applyToPages.tip")));
         applyToPages.setOnAction(e -> applyExclusionsEverywhere());
 
         HBox tileButtons = new HBox(8, excludeTile, includeAll);
@@ -662,16 +662,16 @@ public class ConverterView extends StackPane {
 
         body.getChildren().addAll(
             lookChips,
-            field("Dithering", ditherBox),
-            slider("Brightness", brightness),
-            slider("Contrast", contrast),
-            slider("Gamma", gamma),
-            slider("Saturation", saturation),
-            slider("Sharpen", sharpen),
+            field(Messages.get("image.dither"), ditherBox),
+            slider(Messages.get("image.brightness"), brightness),
+            slider(Messages.get("image.contrast"), contrast),
+            slider(Messages.get("image.gamma"), gamma),
+            slider(Messages.get("image.saturation"), saturation),
+            slider(Messages.get("image.sharpen"), sharpen),
             fill,
             cropRow,
             new Separator(),
-            field("Cut the page into", gridBox),
+            field(Messages.get("tiles.grid"), gridBox),
             tileControls,
             pageRow);
 
@@ -862,14 +862,14 @@ public class ConverterView extends StackPane {
         List<Tile> tiles = currentTiles();
         int position = indexOfFocused(tiles);
         tileLabel.setText(focusedTile == null || position < 0
-            ? "Click a cell to look at it"
-            : "Tile " + (position + 1) + " of " + tiles.size() + "  (" + focusedTile.label() + ")");
+            ? Messages.get("tiles.pick")
+            : Messages.get("tiles.position", position + 1, tiles.size(), focusedTile.label()));
         previousTile.setDisable(tiles.isEmpty() || position <= 0);
         nextTile.setDisable(tiles.isEmpty() || position < 0 || position >= tiles.size() - 1);
 
         boolean out = focusedTile != null && gridOverlay.excluded().contains(focusedTile.label());
         excludeTile.setDisable(focusedTile == null);
-        excludeTile.setText(out ? "Put this tile back" : "Exclude this tile");
+        excludeTile.setText(Messages.get(out ? "tiles.include" : "tiles.exclude"));
 
         int included = gridOverlay.includedCount();
         boolean anyExcluded = included != tiling.count();
@@ -884,7 +884,7 @@ public class ConverterView extends StackPane {
         applyToPages.setVisible(manyPages);
         applyToPages.setManaged(manyPages);
 
-        tileCount.setText(included + " of " + tiling.count() + " tiles will be converted");
+        tileCount.setText(Messages.get("tiles.count", included, tiling.count()));
     }
 
     private void applyExclusionsEverywhere() {
@@ -896,9 +896,8 @@ public class ConverterView extends StackPane {
         int pages = job.applyExclusionsToAllPages();
         // Said out loud: it changed pages that are not on screen, so nothing else would show it.
         status.setText(cells == 0
-            ? "All " + pages + " pages now have every tile included."
-            : "Those " + cells + (cells == 1 ? " cell is" : " cells are")
-                + " now switched off on all " + pages + " pages.");
+            ? Messages.get("tiles.allIncluded", pages)
+            : Messages.plural("tiles.switchedOff", cells, pages));
     }
 
     /** The pieces of the page now on screen, in reading order. */
@@ -958,7 +957,7 @@ public class ConverterView extends StackPane {
         boolean document = job != null && job.isDocument();
         pageRowVisible(document);
         if (document) {
-            pageLabel.setText("Page " + job.page() + " of " + job.pageCount());
+            pageLabel.setText(Messages.get("page.position", job.page(), job.pageCount()));
             previousPage.setDisable(job.page() <= 1);
             nextPage.setDisable(job.page() >= job.pageCount());
         }
@@ -991,7 +990,7 @@ public class ConverterView extends StackPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button collapse = iconButton(chevron, "Collapse this panel", fold);
+        Button collapse = iconButton(chevron, Messages.get("settings.collapse"), fold);
         collapse.getStyleClass().add(Styles.FLAT);
 
         HBox box = new HBox(8, new FontIcon(icon), label, spacer, collapse);
@@ -1013,19 +1012,19 @@ public class ConverterView extends StackPane {
     // --- action bar -------------------------------------------------------------------------
 
     private Node buildActionBar() {
-        Button chooseOutput = new Button("Output folder…", new FontIcon(Feather.FOLDER));
+        Button chooseOutput = new Button(Messages.get("dock.outputFolder"), new FontIcon(Feather.FOLDER));
         chooseOutput.getStyleClass().add(Styles.FLAT);
         chooseOutput.setOnAction(e -> chooseOutputDir());
 
         outputLabel.getStyleClass().add(Styles.TEXT_MUTED);
 
-        Button theme = iconButton(Feather.MOON, "Light / dark — right-click for more",
+        Button theme = iconButton(Feather.MOON, Messages.get("dock.theme"),
             OmniPlotterApp.Theme::toggle);
         theme.getStyleClass().add(Styles.FLAT);
 
         // A moving background is a running repaint, which not everyone wants on a laptop. It is
         // parked on the theme button because that is already where the look of the window is set.
-        CheckMenuItem animated = new CheckMenuItem("Animated background");
+        CheckMenuItem animated = new CheckMenuItem(Messages.get("dock.animated"));
         animated.setSelected(Settings.getBoolean(Settings.UI_AURORA, true));
         animated.setOnAction(e -> {
             Settings.setBoolean(Settings.UI_AURORA, animated.isSelected());
@@ -1036,13 +1035,13 @@ public class ConverterView extends StackPane {
 
         // The window logs where its user cannot see it, so the way to that file has to be in the
         // window itself — otherwise a bug report can only say that something did not work.
-        Button logs = iconButton(Feather.FILE_TEXT, "Open log folder",
+        Button logs = iconButton(Feather.FILE_TEXT, Messages.get("dock.logs"),
             () -> Desktops.openFolder(AppPaths.logs()));
         logs.getStyleClass().add(Styles.FLAT);
 
         // Whoever installed a .dmg and never opens a terminal is exactly the person who would not
         // find out from anywhere else that this application is also a command line.
-        Button terminal = iconButton(Feather.TERMINAL, "Set up the terminal command", this::setUpCommand);
+        Button terminal = iconButton(Feather.TERMINAL, Messages.get("dock.terminal"), this::setUpCommand);
         terminal.getStyleClass().add(Styles.FLAT);
 
         // A ring rather than a 160px bar: in a dock this narrow the bar was most of the width,
@@ -1058,7 +1057,7 @@ public class ConverterView extends StackPane {
         convertButton.setGraphic(new FontIcon(Feather.DOWNLOAD));
         convertButton.setOnAction(e -> convertAll(false));
 
-        Button everyPage = new Button("Convert every page");
+        Button everyPage = new Button(Messages.get("dock.convert.everyPage"));
         everyPage.getStyleClass().add(Styles.FLAT);
         everyPage.setMaxWidth(Double.MAX_VALUE);
         everyPage.setAlignment(Pos.CENTER_LEFT);
@@ -1091,7 +1090,7 @@ public class ConverterView extends StackPane {
         });
 
         convertMore.getStyleClass().addAll(Styles.ACCENT, "hero", "split-right");
-        convertMore.setTooltip(new Tooltip("Other ways to convert"));
+        convertMore.setTooltip(new Tooltip(Messages.get("dock.convert.more")));
         // Only for documents: on a queue of photographs there is no second way to do it.
         convertMore.setVisible(false);
         convertMore.setManaged(false);
@@ -1212,14 +1211,14 @@ public class ConverterView extends StackPane {
         onCalcNumber.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
             slots.min(), slots.max(), slots.contains(current) ? current : slots.min()));
 
+        // The name the calculator itself shows is not prose: it is what appears on its screen.
+        String shown = format == Format.ZPIC ? "pic" : format == Format.TI_8CA ? "Image" : "Pic";
         onCalcHint.setText(switch (rule) {
-            case SLOT -> "Stored on the calculator as "
-                + (format == Format.ZPIC ? "pic" : format == Format.TI_8CA ? "Image" : "Pic")
-                + onCalcNumber.getValue() + ". Slots " + slots.min() + "-" + slots.max()
-                + " on this model.";
-            case NONE -> "Saved as an ordinary file; the name is up to you.";
-            default -> "Written into the file: " + OnCalcName.describe(format, targetBox.getValue())
-                + ". Defaults to the image's own name.";
+            case SLOT -> Messages.get("name.slot", shown, onCalcNumber.getValue(),
+                slots.min(), slots.max());
+            case NONE -> Messages.get("name.none");
+            default -> Messages.get("name.written",
+                OnCalcName.describe(format, targetBox.getValue()));
         });
 
         updating = false;
@@ -1299,7 +1298,7 @@ public class ConverterView extends StackPane {
             restoreCropTool(null);
             Animations.swap(sourceView, null);
             Animations.swap(previewView, null);
-            sourceCaption.setText("No image selected");
+            sourceCaption.setText(Messages.get("preview.none"));
             previewCaption.setText("");
             return;
         }
@@ -1308,10 +1307,11 @@ public class ConverterView extends StackPane {
             Animations.swap(sourceView, null);
             cropOverlay.setImage(0, 0, null);
             restoreCropTool(null);
-            sourceCaption.setText("Could not read this file: " + job.error());
+            sourceCaption.setText(Messages.get("preview.unreadable", job.error()));
         } else {
             Animations.swap(sourceView, SwingFXUtils.toFXImage(src, null));
-            sourceCaption.setText(job.name() + " — " + src.getWidth() + " × " + src.getHeight());
+            sourceCaption.setText(Messages.get("preview.size", job.name(),
+                String.valueOf(src.getWidth()), String.valueOf(src.getHeight())));
             // Whatever was drawn on this image last time, back where it was. The rectangle shows
             // on any cropped image, so one says so without being asked; the tool itself comes back
             // only on the image it was switched on for.
@@ -1387,9 +1387,9 @@ public class ConverterView extends StackPane {
             ConversionJob.Preview preview = task.getValue();
             BufferedImage out = preview.image();
             Animations.swap(previewView, SwingFXUtils.toFXImage(out, null));
-            previewCaption.setText(String.format(java.util.Locale.ROOT, "%s — %d × %d, %d colours, %s",
-                format.id(), out.getWidth(), out.getHeight(), countColors(out),
-                humanSize(preview.encodedSize())));
+            previewCaption.setText(Messages.get("preview.summary", format.id(),
+                String.valueOf(out.getWidth()), String.valueOf(out.getHeight()),
+                String.valueOf(countColors(out)), humanSize(preview.encodedSize())));
 
             // Say up front whether the result will actually fit on the calculator, rather than
             // letting the user find out at transfer time.
@@ -1403,7 +1403,7 @@ public class ConverterView extends StackPane {
                 return;
             }
             Animations.swap(previewView, null);
-            previewCaption.setText("Preview failed: " + task.getException().getMessage());
+            previewCaption.setText(Messages.get("preview.failed", task.getException().getMessage()));
             sizeWarning.setVisible(false);
             sizeWarning.setManaged(false);
         });
@@ -1502,7 +1502,7 @@ public class ConverterView extends StackPane {
 
     private void convertAll(boolean everyPage) {
         if (jobs.isEmpty()) {
-            status.setText("Nothing to convert.");
+            status.setText(Messages.get("dock.nothing"));
             return;
         }
         Format format = formatBox.getValue();
@@ -1543,14 +1543,14 @@ public class ConverterView extends StackPane {
             List<String> failures = task.getValue();
             int ok = written[0];
             status.setText(failures.isEmpty()
-                ? ok + (ok == 1 ? " file written to " : " files written to ") + destination.getFileName()
-                : ok + " written, " + failures.size() + " failed — " + failures.get(0));
+                ? Messages.plural("dock.written", ok, destination.getFileName())
+                : Messages.get("dock.partly", ok, failures.size(), failures.get(0)));
         });
         task.setOnFailed(e -> {
             progress.progressProperty().unbind();
             progress.setVisible(false);
             convertButton.setDisable(false);
-            status.setText("Conversion failed: " + task.getException().getMessage());
+            status.setText(Messages.get("dock.failed", task.getException().getMessage()));
         });
         Thread thread = new Thread(task, "convert");
         thread.setDaemon(true);
@@ -1625,13 +1625,13 @@ public class ConverterView extends StackPane {
      */
     private void chooseFiles() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Add files");
+        chooser.setTitle(Messages.get("chooser.add"));
         chooser.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("Images and documents",
+            new FileChooser.ExtensionFilter(Messages.get("chooser.both"),
                 "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff", "*.pdf"),
-            new FileChooser.ExtensionFilter("Images",
+            new FileChooser.ExtensionFilter(Messages.get("chooser.images"),
                 "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"),
-            new FileChooser.ExtensionFilter("Documents", "*.pdf"));
+            new FileChooser.ExtensionFilter(Messages.get("chooser.documents"), "*.pdf"));
         List<File> chosen = chooser.showOpenMultipleDialog(stage);
         if (chosen != null) {
             addFiles(chosen);
@@ -1653,7 +1653,7 @@ public class ConverterView extends StackPane {
 
     private void chooseOutputDir() {
         DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Output folder");
+        chooser.setTitle(Messages.get("chooser.output"));
         if (outputDir.toFile().isDirectory()) {
             chooser.setInitialDirectory(outputDir.toFile());
         }
@@ -1694,24 +1694,21 @@ public class ConverterView extends StackPane {
     private void setUpCommand() {
         var launcher = CommandSetup.launcher();
         if (launcher.isEmpty()) {
-            report("Nothing to link to", paragraph(
-                "This copy is running as a plain jar rather than an installed application, so "
-                    + "there is no launcher to put on your PATH. Install OmniPlotter and set the "
-                    + "command up from there."));
+            report("setup.noLauncher", paragraph(Messages.get("setup.noLauncher.detail")));
             return;
         }
         try {
             CommandSetup.Outcome outcome =
                 CommandSetup.install(CommandSetup.consoleLauncher(launcher.get()));
             if (outcome.onPath()) {
-                report("Ready", paragraph("Open a terminal and run:"), new CommandBlock(HELP));
+                report("setup.ready", paragraph(Messages.get("setup.ready.detail")), new CommandBlock(HELP));
             } else {
-                report("One step left", oneStepLeft(outcome));
+                report("setup.oneStep", oneStepLeft(outcome));
             }
         } catch (IOException e) {
             // A message of null is not worth showing anyone, and String.valueOf printed that word.
             String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            report("Could not set up the command", paragraph(reason));
+            report("setup.error", paragraph(reason));
         }
     }
 
@@ -1726,39 +1723,38 @@ public class ConverterView extends StackPane {
      */
     private Node[] oneStepLeft(CommandSetup.Outcome outcome) {
         String line = outcome.shellLine().orElseThrow();
-        Label what = paragraph("The command was linked into " + shorten(outcome.link().getParent())
-            + ", which your shell does not look in — so " + CommandSetup.COMMAND
-            + " will not be found there yet.");
+        Label what = paragraph(Messages.get("setup.oneStep.detail",
+            shorten(outcome.link().getParent()), CommandSetup.COMMAND));
 
         if (outcome.shellFile().isEmpty()) {
             // Windows keeps PATH in the registry, so there is no file to offer to edit.
             return new Node[] {
                 what,
-                paragraph("Run this once in PowerShell to add it:"),
+                paragraph(Messages.get("setup.windows")),
                 new CommandBlock(line),
             };
         }
 
         Path file = outcome.shellFile().get();
         VBox rest = new VBox(10);
-        Button add = new Button("Add it to " + shorten(file) + " for me");
+        Button add = new Button(Messages.get("setup.add", shorten(file)));
         add.getStyleClass().addAll(Styles.ACCENT, Styles.SMALL);
         add.setOnAction(e -> {
             try {
                 CommandSetup.addToShellFile(file, line);
                 rest.getChildren().setAll(
-                    paragraph("Added to " + shorten(file) + ". Open a new terminal and run:"),
+                    paragraph(Messages.get("setup.added", shorten(file))),
                     new CommandBlock(HELP));
             } catch (IOException failed) {
-                rest.getChildren().setAll(paragraph("Could not write to " + shorten(file)
-                    + ": " + failed.getMessage() + ". The line above still does it by hand."));
+                rest.getChildren().setAll(paragraph(
+                    Messages.get("setup.addFailed", shorten(file), failed.getMessage())));
             }
         });
         rest.getChildren().add(add);
 
         return new Node[] {
             what,
-            paragraph("This line adds it, at the end of " + shorten(file) + ":"),
+            paragraph(Messages.get("setup.line", shorten(file))),
             new CommandBlock(line),
             rest,
         };
@@ -1771,11 +1767,11 @@ public class ConverterView extends StackPane {
      * proposed was text nobody could select. This one takes nodes, which is what lets a
      * {@link CommandBlock} carry the line instead.
      */
-    private void report(String header, Node... body) {
+    private void report(String headerKey, Node... body) {
         Dialog<Void> dialog = new Dialog<>();
         dialog.initOwner(stage);
-        dialog.setTitle("Terminal command");
-        dialog.setHeaderText(header);
+        dialog.setTitle(Messages.get("setup.title"));
+        dialog.setHeaderText(Messages.get(headerKey));
 
         VBox content = new VBox(10, body);
         content.setMaxWidth(520);
@@ -1820,15 +1816,15 @@ public class ConverterView extends StackPane {
     }
 
     private Node updateBanner(UpdateCheck.Result result) {
-        Label text = new Label("OmniPlotter " + result.latest() + " is available.");
+        Label text = new Label(Messages.get("update.available", result.latest()));
 
-        Button notes = new Button("Release notes");
+        Button notes = new Button(Messages.get("update.notes"));
         notes.getStyleClass().addAll(Styles.SMALL, Styles.ACCENT);
         notes.setOnAction(e -> Desktops.openUrl(result.url()));
 
         // Skipping is remembered, so the same version does not come back tomorrow. Dismissing is
         // not: closing a banner is not the same as saying no.
-        Button skip = new Button("Skip this version");
+        Button skip = new Button(Messages.get("update.skip"));
         skip.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
         skip.setOnAction(e -> {
             Settings.set(Settings.UPDATE_SKIPPED, result.latest().toString());
@@ -1836,7 +1832,7 @@ public class ConverterView extends StackPane {
             hideBanner();
         });
 
-        Button dismiss = iconButton(Feather.X, "Dismiss", this::hideBanner);
+        Button dismiss = iconButton(Feather.X, Messages.get("update.dismiss"), this::hideBanner);
         dismiss.getStyleClass().add(Styles.FLAT);
 
         Region spacer = new Region();
@@ -1900,8 +1896,8 @@ public class ConverterView extends StackPane {
 
     private void refreshStatus() {
         status.setText(jobs.isEmpty()
-            ? "Drop images to begin."
-            : jobs.size() + (jobs.size() == 1 ? " image queued." : " images queued."));
+            ? Messages.get("queue.begin")
+            : Messages.plural("queue.queued", jobs.size()));
     }
 
     // --- small helpers ----------------------------------------------------------------------

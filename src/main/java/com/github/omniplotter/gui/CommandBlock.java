@@ -1,6 +1,7 @@
 package com.github.omniplotter.gui;
 
 import atlantafx.base.theme.Styles;
+import com.github.omniplotter.app.Messages;
 import javafx.animation.PauseTransition;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -42,7 +43,7 @@ public class CommandBlock extends HBox {
 
         Button copy = new Button(null, new FontIcon(Feather.COPY));
         copy.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
-        copy.setTooltip(new Tooltip("Copy"));
+        copy.setTooltip(new Tooltip(Messages.get("command.copy")));
         copy.setOnAction(e -> {
             copyToClipboard();
             confirm(copy);
@@ -63,12 +64,12 @@ public class CommandBlock extends HBox {
      *  click that missed. */
     private void confirm(Button copy) {
         copy.setGraphic(new FontIcon(Feather.CHECK));
-        copy.setTooltip(new Tooltip("Copied"));
+        copy.setTooltip(new Tooltip(Messages.get("command.copied")));
 
         PauseTransition back = new PauseTransition(CONFIRMED);
         back.setOnFinished(e -> {
             copy.setGraphic(new FontIcon(Feather.COPY));
-            copy.setTooltip(new Tooltip("Copy"));
+            copy.setTooltip(new Tooltip(Messages.get("command.copy")));
         });
         back.play();
     }
