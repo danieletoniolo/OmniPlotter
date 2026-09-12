@@ -60,6 +60,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.DragEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
@@ -98,6 +99,15 @@ public class ConverterView extends StackPane {
 
     /** Space between the floating surfaces, and between them and the window edge. */
     private static final double GAP = 14;
+
+    /**
+     * How much wheel makes one step.
+     *
+     * <p>A notch is about forty; a trackpad sends a stream of much smaller ones for a single
+     * flick, which without a threshold and a rest between moves would cross three steps at once.
+     */
+    private static final double WHEEL_STEP = 60;
+    private static final long WHEEL_REST = 400;
 
     /** The output panel, open. */
     private static final double SETTINGS_WIDTH = 300;
@@ -185,6 +195,11 @@ public class ConverterView extends StackPane {
 
     /** Held so an opened step can be brought into view when the one above it is a tall one. */
     private ScrollPane settingsScroll;
+
+    /** How much wheel has gone by since the panel last moved on a step, and which way. */
+    private double wheelSince;
+    private int wheelDirection;
+    private long wheelAt;
     /** Where you are in the document and in the grid, under the pair both are about. */
     private HBox previewToolbar;
     private HBox pageRow;
@@ -675,6 +690,7 @@ public class ConverterView extends StackPane {
         // The first one, without animating it: this is where the panel starts, not something the
         // user has just done.
         expandStep(0, false);
+        wireStepWheel();
 
         settingsSide = new SidePanel(settingsScroll, settingsRail(), SETTINGS_WIDTH, Pos.TOP_RIGHT);
         return settingsSide;
@@ -1181,6 +1197,65 @@ public class ConverterView extends StackPane {
     }
 
     /**
+     * The wheel, read as a gesture rather than as a position.
+     *
+     * <p>With one step open the panel holds less than it can show, so there is no scroll bar to
+     * follow — but a ScrollEvent arrives whether or not anything scrolls, and that is what this
+     * listens to. When the open step *is* taller than the panel, which is the picture controls and
+     * their five sliders, the wheel scrolls through it first and only moves on at the end: content
+     * you cannot finish reading is worse than a gesture that takes two flicks.
+     */
+    private void wireStepWheel() {
+        settingsScroll.addEventFilter(ScrollEvent.SCROLL, event -> {
+            double delta = event.getDeltaY();
+            if (delta == 0) {
+                return;
+            }
+            int direction = delta < 0 ? 1 : -1;
+
+            if (canScroll(direction)) {
+                wheelSince = 0;
+                return;
+            }
+            event.consume();
+
+            if (direction != wheelDirection) {
+                wheelSince = 0;
+                wheelDirection = direction;
+            }
+            wheelSince += Math.abs(delta);
+
+            long now = System.currentTimeMillis();
+            if (wheelSince < WHEEL_STEP || now - wheelAt < WHEEL_REST) {
+                return;
+            }
+            wheelSince = 0;
+            wheelAt = now;
+            expandStep(StepSequence.next(applicable(), openStep, direction), true);
+        });
+    }
+
+    /** Whether the panel itself still has somewhere to go that way. */
+    private boolean canScroll(int direction) {
+        double content = settingsScroll.getContent().getBoundsInLocal().getHeight();
+        double viewport = settingsScroll.getViewportBounds().getHeight();
+        if (content <= viewport) {
+            return false;
+        }
+        double at = settingsScroll.getVvalue();
+        return direction > 0 ? at < 1 - 1e-3 : at > 1e-3;
+    }
+
+    /** Which steps apply, for the sequence to walk over the ones that do not. */
+    private boolean[] applicable() {
+        boolean[] applies = new boolean[steps.length];
+        for (int i = 0; i < steps.length; i++) {
+            applies[i] = !steps[i].isWaiting();
+        }
+        return applies;
+    }
+
+    /**
      * Opens one step and closes the rest.
      *
      * <p>Both halves run at once rather than one after the other: it is one movement, and
@@ -1194,6 +1269,8 @@ public class ConverterView extends StackPane {
             steps[i].setExpanded(i == index, animate);
         }
         openStep = index;
+        // Whatever the wheel had accumulated was about where the panel used to be.
+        wheelSince = 0;
         if (animate) {
             bringIntoView(steps[index]);
         }
