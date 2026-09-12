@@ -279,6 +279,7 @@ public class ConverterView extends StackPane {
         wireDragAndDrop();
 
         restoreSelection();
+        updatePageControls(null);
         updateOutputLabel();
         // The queue starts empty, so the arrow starts hidden and Convert starts round.
         updateConvertMenu();
@@ -699,6 +700,8 @@ public class ConverterView extends StackPane {
 
         pageRow = new HBox(6, previousPage, pageLabel, nextPage);
         pageRow.setAlignment(Pos.CENTER_LEFT);
+        pageRow.setVisible(false);
+        pageRow.setManaged(false);
 
         // Stepping through the pieces, because seeing one of twelve and having to guess at the
         // rest is most of the way to not being able to judge the grid at all.
@@ -719,6 +722,8 @@ public class ConverterView extends StackPane {
 
         tileRow = new HBox(6, previousTile, tileLabel, nextTile, spacer, excludeTile);
         tileRow.setAlignment(Pos.CENTER_LEFT);
+        tileRow.setVisible(false);
+        tileRow.setManaged(false);
         HBox.setHgrow(tileRow, Priority.ALWAYS);
 
         previewToolbar = new VBox(6, pageRow, tileRow);
