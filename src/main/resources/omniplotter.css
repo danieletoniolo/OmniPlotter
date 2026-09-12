@@ -561,6 +561,33 @@
     -fx-bounds-type: logical;
 }
 
+/*
+ * Bold, from a face that exists.
+ *
+ * Neither the theme nor this file names a font family, so the window draws in the platform's
+ * system font — which on macOS is the hidden one, and JavaFX cannot find a bold cut for it. Asked
+ * for bold it *synthesises* one: the strokes thicken and the advance widths do not move, so the
+ * letters end up crammed against each other. Measured rather than guessed at, "Anteprima
+ * Originale" came out at 116.13px regular and 116.13px bold — the same run, inked heavier.
+ *
+ * Naming a family gets a real cut. SF Pro Text is that same system typeface under its public name,
+ * and 134.55px against 141.08px says the two faces are genuinely different. Applied only where
+ * something is bold, so every other measurement in the window stays exactly where it was.
+ *
+ * "Helvetica Neue" is deliberately absent, tempting as it looks in a list like this: on macOS its
+ * bold resolves to Helvetica Neue *Condensed* Bold, which is the very thing being fixed here.
+ */
+.text-caption,
+.title-1,
+.title-2,
+.title-3,
+.text-bold,
+.text-bolder,
+.step-title,
+.step-number {
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Inter", "Roboto", "Noto Sans", "DejaVu Sans", SansSerif;
+}
+
 /* --- the rail the steps hang off -------------------------------------------------------- */
 
 /*
