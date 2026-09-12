@@ -34,6 +34,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -377,14 +378,30 @@ public class ConverterView extends StackPane {
         return tab;
     }
 
+    /**
+     * The empty list, which is also the way to fill it.
+     *
+     * <p>It looked like a target and behaved like a label: the only way to a file chooser was the
+     * small {@code +} above it. The placeholder already covers exactly the empty area and already
+     * receives the clicks, so it only had to be told what they mean.
+     *
+     * <p>Only while the list is empty. On a filled one, clicking the space below the rows is how a
+     * selection is cleared, and taking that over to open a dialog would be worse than the gap.
+     */
     private Node dropHint() {
         // Sized from the stylesheet, not here: see the note beside .drop-hint in omniplotter.css.
         FontIcon icon = new FontIcon(Feather.UPLOAD_CLOUD);
         Label text = new Label(Messages.get("queue.empty"));
         text.getStyleClass().add(Styles.TEXT_MUTED);
-        VBox box = new VBox(8, icon, text);
+
+        Label click = new Label(Messages.get("queue.empty.click"));
+        click.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+
+        VBox box = new VBox(8, icon, text, click);
         box.setAlignment(Pos.CENTER);
         box.getStyleClass().add("drop-hint");
+        box.setCursor(Cursor.HAND);
+        box.setOnMouseClicked(e -> chooseFiles());
         return box;
     }
 
