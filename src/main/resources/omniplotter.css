@@ -490,3 +490,45 @@
     -fx-border-color: -color-border-muted transparent transparent transparent;
     -fx-border-width: 1px 0 0 0;
 }
+
+/* --- the tour and the help panel --------------------------------------------------------- */
+
+/*
+ * Heavier than the drop veil, because this one is not a hint over a window still in use: while it
+ * is up, the window is being explained rather than operated, and the one region not dimmed is the
+ * one being talked about.
+ */
+.help-veil {
+    -fx-fill: -op-drop-veil;
+}
+
+.help-card {
+    -fx-effect: dropshadow(gaussian, -op-shadow-strong, 30, 0.0, 0, 10);
+}
+
+/* A glass ScrollPane, so both properties have to be cleared or the viewport shows through it. */
+.help-panel,
+.help-panel > .viewport {
+    -fx-background: transparent;
+    -fx-background-color: transparent;
+}
+
+.help-panel {
+    -fx-effect: dropshadow(gaussian, -op-shadow-strong, 34, 0.0, 0, 12);
+}
+
+.help-panel > .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.help-panel > .scroll-bar > .thumb {
+    -fx-background-color: -op-thumb;
+    -fx-background-radius: 6px;
+}
+
+.help-panel > .scroll-bar > .increment-button,
+.help-panel > .scroll-bar > .decrement-button {
+    -fx-padding: 0;
+    -fx-opacity: 0;
+}

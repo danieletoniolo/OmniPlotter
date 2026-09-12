@@ -8,6 +8,7 @@ import com.github.omniplotter.app.Desktops;
 import com.github.omniplotter.app.Messages;
 import com.github.omniplotter.app.Settings;
 import com.github.omniplotter.app.UpdateCheck;
+import com.github.omniplotter.app.Version;
 import com.github.omniplotter.engine.data.Adjustments;
 import com.github.omniplotter.engine.data.ConversionOptions;
 import com.github.omniplotter.engine.data.Crop;
@@ -104,6 +105,7 @@ public class ConverterView extends StackPane {
     private final Backdrop backdrop = new Backdrop();
     private final BorderPane content = new BorderPane();
     private final StackPane dropOverlay = buildDropOverlay();
+    private HelpOverlay help;
 
     /** The floating surfaces, in the order they arrive on screen. */
     private Node[] surfaces = new Node[0];
@@ -259,7 +261,10 @@ public class ConverterView extends StackPane {
 
         // Above the content and below the drop target: it belongs to the action bar, and a file
         // being dragged in should still cover everything.
-        getChildren().addAll(backdrop, content, convertMenu, dropOverlay);
+        // Over the content and under the drop target: a file being dragged in still covers
+        // everything, and the tour covers everything else.
+        help = buildHelp(queueBox, settingsBox, dock);
+        getChildren().addAll(backdrop, content, convertMenu, help, dropOverlay);
         surfaces = new Node[] { queueBox, sourcePane, previewPane, settingsBox, dock };
 
         // Restored without animation: a fold the user made last week is not news to play back.
@@ -278,6 +283,7 @@ public class ConverterView extends StackPane {
         // The queue starts empty, so the arrow starts hidden and Convert starts round.
         updateConvertMenu();
         checkForUpdate();
+        firstRun();
     }
 
     // --- queue ------------------------------------------------------------------------------
@@ -1103,7 +1109,11 @@ public class ConverterView extends StackPane {
             backdrop.setEnabled(animated.isSelected());
         });
 
-        ContextMenu menu = new ContextMenu(terminal, logs, new SeparatorMenuItem(), animated);
+        MenuItem tour = new MenuItem(Messages.get("help.tour.start"), new FontIcon(Feather.MAP));
+        tour.setOnAction(e -> help.startTour());
+
+        ContextMenu menu = new ContextMenu(tour, new SeparatorMenuItem(), terminal, logs,
+            new SeparatorMenuItem(), animated);
         // Set here rather than at construction: the handler needs the button it is shown on.
         more.setOnAction(e -> menu.show(more, Side.TOP, 0, -6));
 
@@ -1167,8 +1177,11 @@ public class ConverterView extends StackPane {
         convertGroup.getStyleClass().add("split-button");
         convertGroup.setAlignment(Pos.CENTER_LEFT);
 
+        Button info = iconButton(Feather.INFO, Messages.get("help.open"), () -> help.showConcepts());
+        info.getStyleClass().add(Styles.FLAT);
+
         HBox bar = new HBox(12, chooseOutput, outputLabel, spacer, status, progress,
-            theme, more, convertGroup);
+            info, theme, more, convertGroup);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10, 14, 10, 16));
         bar.getStyleClass().add("dock");
@@ -1879,6 +1892,69 @@ public class ConverterView extends StackPane {
         return path.toString().replace(System.getProperty("user.home"), "~");
     }
 
+    // --- help -------------------------------------------------------------------------------
+
+    /**
+     * The tour, over the regions it is about.
+     *
+     * <p>The stops are the window's own nodes, so there is no second description of the layout to
+     * keep in step with the first. The previews are one stop rather than two: which of the two
+     * images is the output is a thing to say once, and the accent edge says it afterwards.
+     */
+    private HelpOverlay buildHelp(Node queueBox, Node settingsBox, Node dock) {
+        return new HelpOverlay(List.of(
+            new HelpOverlay.Spot(queueBox, "files"),
+            new HelpOverlay.Spot(previewPane, "previews"),
+            new HelpOverlay.Spot(settingsBox, "steps"),
+            new HelpOverlay.Spot(dock, "convert")), helpFooter());
+    }
+
+    /** The version, an update check, and which language the window is in. */
+    private Node helpFooter() {
+        Version running = UpdateCheck.current();
+        Label version = new Label(running == null
+            ? Messages.get("help.version.dev")
+            : Messages.get("help.version", running));
+        version.getStyleClass().add(Styles.TEXT_MUTED);
+
+        Label answer = new Label();
+        answer.getStyleClass().add(Styles.TEXT_MUTED);
+        answer.setWrapText(true);
+
+        Button check = new Button(Messages.get("help.checkUpdates"));
+        check.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        check.setOnAction(e -> checkForUpdateNow(check, answer));
+
+        ComboBox<String> language = new ComboBox<>(
+            FXCollections.observableArrayList(Messages.AUTOMATIC, "en", "it"));
+        language.setConverter(labeller(code -> switch (code) {
+            case "en" -> "English";
+            case "it" -> "Italiano";
+            default -> Messages.get("help.language.auto");
+        }));
+        language.getSelectionModel().select(Settings.get(Settings.UI_LANGUAGE, Messages.AUTOMATIC));
+        language.valueProperty().addListener((o, was, now) -> {
+            if (now != null) {
+                Settings.set(Settings.UI_LANGUAGE, now);
+                Settings.save();
+            }
+        });
+
+        Label restart = new Label(Messages.get("help.language.restart"));
+        restart.getStyleClass().add("step-subtitle");
+        restart.setWrapText(true);
+
+        Label unsigned = new Label(Messages.get("help.unsigned"));
+        unsigned.getStyleClass().add("step-subtitle");
+        unsigned.setWrapText(true);
+
+        HBox versionRow = new HBox(10, version, check);
+        versionRow.setAlignment(Pos.CENTER_LEFT);
+
+        return new VBox(8, new Separator(), versionRow, answer,
+            field(Messages.get("help.language"), language), restart, unsigned);
+    }
+
     // --- updates ----------------------------------------------------------------------------
 
     /**
@@ -1888,12 +1964,59 @@ public class ConverterView extends StackPane {
      * all when the machine is offline.
      */
     private void checkForUpdate() {
-        UpdateCheck.inBackground(result -> Platform.runLater(() -> {
-            Node banner = updateBanner(result);
-            BorderPane.setMargin(banner, new Insets(GAP, GAP, 0, GAP));
-            content.setTop(banner);
-            Animations.dropIn(banner);
-        }));
+        UpdateCheck.inBackground(result -> Platform.runLater(() -> showUpdateBanner(result)));
+    }
+
+    private void showUpdateBanner(UpdateCheck.Result result) {
+        Node banner = updateBanner(result);
+        BorderPane.setMargin(banner, new Insets(GAP, GAP, 0, GAP));
+        content.setTop(banner);
+        Animations.dropIn(banner);
+    }
+
+    /**
+     * The check someone asked for, now.
+     *
+     * <p>The automatic one is silent unless it has news, which is right — and left no way at all to
+     * tell a check that works from one that cannot. This one answers either way, including saying
+     * what went wrong, and ignores both the daily interval and the skipped version: someone
+     * pressing a button is asking.
+     */
+    private void checkForUpdateNow(Button check, Label answer) {
+        check.setDisable(true);
+        answer.setText(Messages.get("update.checking"));
+
+        Task<java.util.Optional<UpdateCheck.Result>> task = new Task<>() {
+            @Override
+            protected java.util.Optional<UpdateCheck.Result> call() throws Exception {
+                return UpdateCheck.fetchLatest();
+            }
+        };
+        task.setOnSucceeded(e -> {
+            check.setDisable(false);
+            Version running = UpdateCheck.current();
+            var latest = task.getValue();
+            if (latest.isEmpty()) {
+                // A private repository answers 404, which is indistinguishable from having no
+                // releases. Both are said, because from here they are the same answer.
+                answer.setText(Messages.get("update.none"));
+            } else if (running == null) {
+                answer.setText(Messages.get("update.development", latest.get().latest()));
+            } else if (latest.get().latest().isNewerThan(running)) {
+                answer.setText(Messages.get("update.available", latest.get().latest()));
+                showUpdateBanner(latest.get());
+            } else {
+                answer.setText(Messages.get("update.current"));
+            }
+        });
+        task.setOnFailed(e -> {
+            check.setDisable(false);
+            answer.setText(Messages.get("update.unreachable", task.getException().getMessage()));
+        });
+
+        Thread thread = new Thread(task, "update-check-now");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private Node updateBanner(UpdateCheck.Result result) {
@@ -1931,6 +2054,25 @@ public class ConverterView extends StackPane {
         if (banner != null) {
             Animations.dismiss(banner, () -> content.setTop(null));
         }
+    }
+
+    /**
+     * The tour, once, on a first launch.
+     *
+     * <p>The only thing in the application that appears without being asked for. Remembered as
+     * soon as it is shown rather than when it is finished, because someone who closes it on the
+     * first card has answered the question.
+     */
+    private void firstRun() {
+        if (Settings.getBoolean(Settings.UI_HELP_SEEN, false)) {
+            return;
+        }
+        Settings.setBoolean(Settings.UI_HELP_SEEN, true);
+        Settings.save();
+        // After the intro animation, which is running on the surfaces it would be pointing at.
+        PauseTransition wait = new PauseTransition(Duration.millis(900));
+        wait.setOnFinished(e -> help.startTour());
+        wait.play();
     }
 
     /**

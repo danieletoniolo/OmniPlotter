@@ -37,6 +37,7 @@ public final class Settings {
     public static final String UPDATE_LAST_CHECK = "updates.lastCheck";
     public static final String UPDATE_SKIPPED = "updates.skippedVersion";
     public static final String UI_LANGUAGE = "ui.language";
+    public static final String UI_HELP_SEEN = "ui.help.seen";
     public static final String UI_AURORA = "ui.aurora";
     public static final String UI_QUEUE_FOLDED = "ui.queue.folded";
     public static final String UI_SETTINGS_FOLDED = "ui.settings.folded";
