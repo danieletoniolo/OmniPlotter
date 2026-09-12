@@ -560,3 +560,30 @@
     -fx-font-smoothing-type: lcd;
     -fx-bounds-type: logical;
 }
+
+/* --- the rail the steps hang off -------------------------------------------------------- */
+
+/*
+ * One segment per step, from its own badge down to the next one, so the pieces meet without
+ * anything having to count them. Drawn by a Scale pivoted at its top rather than by a height
+ * animation: the segment's height comes from filling what is left of the step, so there is no
+ * number to animate to.
+ */
+.step-rail {
+    -fx-background-color: -color-border-default;
+    -fx-min-width: 1px;
+    -fx-max-width: 1px;
+}
+
+/*
+ * A stop not reached yet. Outlined rather than filled, which is the difference that matters: a
+ * dimmed heading alone would read the same as the one folded step, and two collapsed states that
+ * look alike would be worse than the gap this replaces.
+ */
+.step-number.waiting {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-muted;
+    -fx-border-color: -color-border-default;
+    -fx-border-radius: 999px;
+    -fx-border-width: 1px;
+}

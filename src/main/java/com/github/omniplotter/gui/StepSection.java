@@ -2,6 +2,7 @@ package com.github.omniplotter.gui;
 
 import atlantafx.base.theme.Styles;
 import com.github.omniplotter.app.Messages;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
@@ -13,59 +14,99 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.transform.Scale;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 
 /**
- * One numbered step of the output panel.
+ * One stop on the output panel's timeline.
  *
  * <p>The panel was a single column of labelled controls in the order the code happened to build
  * them, with the whole document side of the application folded away inside a section called
- * "Image". Which of them a conversion needs, and in what order, was something to work out by
- * reading all of it.
+ * "Image". Numbering it helped and left one fault behind: step 4 was the only one that came and
+ * went, and a hole at 4 makes the rest look like five unrelated things with one missing.
  *
- * <p>The number is the point. It says there is an order, that this is a place in it, and — for the
- * steps that appear and disappear with the file being converted — that nothing is missing when a
- * number is absent.
+ * <p>So nothing is ever removed. Every step keeps its place on a rail, and what changes is whether
+ * it is <b>open</b> or <b>waiting</b> — waiting being an outlined badge and a dimmed heading, with
+ * the reason underneath where there is one to give. The rail runs down to the last open step,
+ * through any dim badge on the way, because a stop you are skipping is still on the line.
+ *
+ * <p>Each step draws the segment from its own badge to the next one, so the segments meet without
+ * anything having to know how many steps there are. That also means the vertical gap between steps
+ * is carried by the content column rather than by the parent's spacing: spacing would break the
+ * line into pieces with a gap at every boundary.
  */
-public class StepSection extends VBox {
+public class StepSection extends HBox {
 
+    /** Wide enough for the badge, with the rail down its middle. */
+    private static final double GUTTER = 26;
+
+    /** Between one step and the next, carried inside the step so the rail can span it. */
+    private static final double BELOW = 18;
+
+    private static final double DIMMED = 0.5;
+
+    private final Label badge = new Label();
+    private final Label title = new Label();
+    private final HBox heading;
+    private final VBox content = new VBox(6);
     private final VBox body = new VBox(10);
 
-    /**
-     * Whether the body is away.
-     *
-     * <p>Held rather than read back off {@code body.isVisible()}. Asking the node meant the
-     * handler said {@code !isVisible()} — which reads like "toggle" and means "fold" when it is
-     * already folded, so a closed step could not be opened at all.
-     */
-    private boolean folded;
+    /** The segment from this badge down to the next one. */
+    private final Region rail = new Region();
 
-    public StepSection(int number, String title, String subtitle) {
-        super(8);
+    /** Pivoted at the top, so driving its {@code y} draws the segment downward. */
+    private final Scale draw = new Scale(1, 1, 0, 0);
 
-        Label badge = new Label(String.valueOf(number));
+    /** The line shown when the step is open, and the one shown while it waits. */
+    private Label says;
+    private Label because;
+
+    private Button fold;
+
+    /** Which of the parts above are on screen. Kept out of the nodes so it can be tested. */
+    private final StepState state = new StepState(false);
+
+    public StepSection(int number, String titleText, String subtitle) {
+        super(10);
+
+        badge.setText(String.valueOf(number));
         badge.getStyleClass().add("step-number");
 
-        Label name = new Label(title);
-        name.getStyleClass().add("step-title");
+        rail.getStyleClass().add("step-rail");
+        rail.getTransforms().add(draw);
+        VBox.setVgrow(rail, Priority.ALWAYS);
 
-        HBox heading = new HBox(8, badge, name);
+        VBox gutter = new VBox(4, badge, rail);
+        gutter.setAlignment(Pos.TOP_CENTER);
+        gutter.setMinWidth(GUTTER);
+        gutter.setPrefWidth(GUTTER);
+        gutter.setMaxWidth(GUTTER);
+
+        title.setText(titleText);
+        title.getStyleClass().add("step-title");
+
+        heading = new HBox(8, title);
         heading.setAlignment(Pos.CENTER_LEFT);
         heading.getStyleClass().add("step-heading");
+        // The whole heading, not just the chevron: a 20-pixel glyph is a small thing to find and a
+        // smaller one to hit, and a waiting step has no chevron at all to offer.
+        heading.setCursor(Cursor.HAND);
+        heading.setOnMouseClicked(e -> headingClicked());
 
-        getStyleClass().add("step");
-        getChildren().add(heading);
-
-        // A step whose one-line reason is obvious does not need the line.
+        content.getChildren().add(heading);
         if (subtitle != null) {
-            Label says = new Label(subtitle);
+            says = new Label(subtitle);
             says.getStyleClass().add("step-subtitle");
             says.setWrapText(true);
-            getChildren().add(says);
+            content.getChildren().add(says);
         }
+        content.getChildren().add(body);
+        content.setPadding(new Insets(0, 0, BELOW, 0));
+        HBox.setHgrow(content, Priority.ALWAYS);
 
-        getChildren().add(body);
+        getStyleClass().add("step");
+        getChildren().addAll(gutter, content);
     }
 
     public StepSection with(Node... controls) {
@@ -76,49 +117,115 @@ public class StepSection extends VBox {
     /**
      * Adds the chevron that folds this step away.
      *
-     * <p>Only for a step nothing breaks without: the picture adjustments, which most conversions
+     * <p>Only for a step nothing breaks without — the picture adjustments, which most conversions
      * leave alone. A step that has to be filled in is not one to hide.
      */
     public StepSection foldable(boolean startFolded) {
-        Button fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
+        fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
         fold.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
+        // Through the action, so the keyboard reaches it too. The click is then stopped here:
+        // Button does not consume MOUSE_CLICKED, so it would go on to the heading and toggle a
+        // second time, which looks exactly like nothing happening.
+        fold.setOnAction(e -> {
+            state.toggleFold();
+            apply();
+        });
+        fold.setOnMouseClicked(MouseEvent::consume);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox heading = (HBox) getChildren().get(0);
         heading.getChildren().addAll(spacer, fold);
 
-        // Through the action, so the keyboard reaches it too. The click is then stopped here:
-        // Button does not consume MOUSE_CLICKED, so it would go on to the heading below and
-        // toggle a second time, which looks exactly like nothing happening.
-        fold.setOnAction(e -> setFolded(!folded, fold));
-        fold.setOnMouseClicked(MouseEvent::consume);
-
-        // The whole heading, not just the chevron. A 20-pixel glyph is a small thing to find and
-        // a smaller one to hit, and the title beside it looks like it should work.
-        heading.setCursor(Cursor.HAND);
-        heading.setOnMouseClicked(e -> setFolded(!folded, fold));
-
-        setFolded(startFolded, fold);
+        if (startFolded != state.isFolded()) {
+            state.toggleFold();
+        }
+        apply();
         return this;
     }
 
-    private void setFolded(boolean folded, Button fold) {
-        this.folded = folded;
-        body.setVisible(!folded);
-        body.setManaged(!folded);
-        // Everything between the heading and the body goes with it, which is the subtitle.
-        for (int i = 1; i < getChildren().size() - 1; i++) {
-            getChildren().get(i).setVisible(!folded);
-            getChildren().get(i).setManaged(!folded);
-        }
-        fold.setGraphic(new FontIcon(folded ? Feather.CHEVRON_DOWN : Feather.CHEVRON_UP));
-        fold.setTooltip(new Tooltip(Messages.get(folded ? "step.show" : "step.hide")));
+    /** The line to show while this step is waiting, for the one where the reason is not obvious. */
+    public StepSection because(String text) {
+        because = new Label(text);
+        because.getStyleClass().add("step-subtitle");
+        because.setWrapText(true);
+        content.getChildren().add(content.getChildren().indexOf(body), because);
+        apply();
+        return this;
     }
 
-    /** Whether this step is in the panel at all, for the ones that depend on the file. */
-    public void setShown(boolean shown) {
-        setVisible(shown);
-        setManaged(shown);
+    private void headingClicked() {
+        if (state.isWaiting()) {
+            state.openByHand();
+        } else if (fold != null) {
+            state.toggleFold();
+        }
+        apply();
+    }
+
+    public void setWaiting(boolean wait) {
+        state.setWaiting(wait);
+        apply();
+    }
+
+    public boolean isWaiting() {
+        return state.isWaiting();
+    }
+
+    /** One place where the state decides what is on screen. */
+    private void apply() {
+        show(body, state.bodyShown());
+        show(says, state.subtitleShown());
+        show(because, state.reasonShown());
+
+        // In Java rather than in the stylesheet: the arrival animation drives this same property,
+        // and a CSS opacity would win back over it on the next style pass.
+        //
+        // Putting the offset back matters as much. The arrival rises the last few pixels, and a
+        // cascade interrupted part-way — another file landing while it runs — would otherwise
+        // leave a step sitting twelve pixels off for good. Every recompute passes through here
+        // before anything is animated again, so this is where it gets undone.
+        content.setOpacity(state.dimmed() ? DIMMED : 1);
+        content.setTranslateY(0);
+
+        badge.getStyleClass().remove("waiting");
+        if (state.isWaiting()) {
+            badge.getStyleClass().add("waiting");
+        }
+
+        if (fold != null) {
+            show(fold, state.chevronShown());
+            boolean folded = state.isFolded();
+            fold.setGraphic(new FontIcon(folded ? Feather.CHEVRON_DOWN : Feather.CHEVRON_UP));
+            fold.setTooltip(new Tooltip(Messages.get(folded ? "step.show" : "step.hide")));
+        }
+    }
+
+    private static void show(Node node, boolean visible) {
+        if (node != null) {
+            node.setVisible(visible);
+            node.setManaged(visible);
+        }
+    }
+
+    // --- the rail ---------------------------------------------------------------------------
+
+    /** The segment from this badge to the next, for {@link Animations#timeline}. */
+    public Scale railScale() {
+        return draw;
+    }
+
+    /** Where the rail stands when there is nothing to animate. */
+    public void setRailDrawn(boolean drawn) {
+        draw.setY(drawn ? 1 : 0);
+    }
+
+    /** There is nothing below the last step, so it carries no segment. */
+    public void endRail() {
+        show(rail, false);
+    }
+
+    /** What the arrival animation fades in: everything but the badge and the rail. */
+    public Node arriving() {
+        return content;
     }
 }

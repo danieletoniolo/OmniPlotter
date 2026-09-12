@@ -169,8 +169,12 @@ public class ConverterView extends StackPane {
     private final Button includeAll = new Button(Messages.get("tiles.includeAll"));
     private final Button applyToPages = new Button(Messages.get("tiles.applyToPages"));
     private VBox tileControls;
-    /** The step that appears with a file to cut up, so it can be hidden when there is none. */
-    private StepSection tilesSection;
+
+    /** The five stops of the output panel, in order, so their states can be worked out together. */
+    private StepSection[] steps = new StepSection[0];
+
+    /** How far down the rail is currently drawn, so the animation only ever extends it. */
+    private int railTo;
     /** Where you are in the document and in the grid, under the picture both are about. */
     private VBox previewToolbar;
     private HBox pageRow;
@@ -298,6 +302,7 @@ public class ConverterView extends StackPane {
 
         restoreSelection();
         updatePageControls(null);
+        updateSteps();
         updateOutputLabel();
         // The queue starts empty, so the arrow starts hidden and Convert starts round.
         updateConvertMenu();
@@ -331,7 +336,10 @@ public class ConverterView extends StackPane {
         });
         queue.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> showSelection());
         // Whatever changes the queue, the second way to convert appears and disappears with it.
-        jobs.addListener((javafx.collections.ListChangeListener<ConversionJob>) change -> updateConvertMenu());
+        jobs.addListener((javafx.collections.ListChangeListener<ConversionJob>) change -> {
+            updateConvertMenu();
+            updateSteps();
+        });
         VBox.setVgrow(queue, Priority.ALWAYS);
 
         queue.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
@@ -562,8 +570,7 @@ public class ConverterView extends StackPane {
         // how it should look, how to cut it up, what to call it. The old panel was one column of
         // labelled controls with no order stated and the whole document half folded away inside a
         // section called "Image".
-        VBox panel = new VBox(16,
-            title,
+        steps = new StepSection[] {
             new StepSection(1, Messages.get("step.calculator"), Messages.get("step.calculator.says"))
                 .with(field(Messages.get("settings.mode"), modeBox),
                     field(Messages.get("settings.calculator"), targetBox),
@@ -579,7 +586,15 @@ public class ConverterView extends StackPane {
             new StepSection(5, Messages.get("step.name"), Messages.get("step.name.says"))
                 .with(field(Messages.get("settings.name"), onCalcName),
                     field(Messages.get("settings.slot"), onCalcNumber),
-                    onCalcHint));
+                    onCalcHint),
+        };
+        steps[steps.length - 1].endRail();
+
+        // Spacing zero, and the gap between steps carried inside each one: as the parent's spacing
+        // it would break the rail into pieces with a hole at every boundary.
+        VBox panel = new VBox(0, title);
+        panel.getChildren().addAll(steps);
+        VBox.setMargin(title, new Insets(0, 0, PANEL_PADDING, 0));
         panel.setPadding(new Insets(PANEL_PADDING));
 
         // Fixed rather than fitted, so nothing the scroll bar does can change where the text
@@ -721,9 +736,11 @@ public class ConverterView extends StackPane {
         tileCount.getStyleClass().add(Styles.TEXT_MUTED);
         tileControls = new VBox(8, bulk, tileCount);
 
-        tilesSection = new StepSection(4, Messages.get("step.tiles"), Messages.get("step.tiles.says"))
-            .with(field(Messages.get("tiles.grid"), gridBox), tileControls);
-        return tilesSection;
+        return new StepSection(4, Messages.get("step.tiles"), Messages.get("step.tiles.says"))
+            .with(field(Messages.get("tiles.grid"), gridBox), tileControls)
+            // The one step whose waiting is worth explaining: with a file loaded and 2, 3 and 5
+            // open, a dim 4 beside them looks broken rather than inapplicable.
+            .because(Messages.get("step.tiles.waiting"));
     }
 
     /**
@@ -1055,10 +1072,6 @@ public class ConverterView extends StackPane {
     }
 
     private void updatePageControls(ConversionJob job) {
-        // Nothing to cut up when nothing is selected, and a grid picker offering to cut up
-        // nothing is a question rather than a control.
-        tilesSection.setShown(job != null);
-
         boolean document = job != null && job.isDocument();
         pageRowVisible(document);
         if (document) {
@@ -1072,6 +1085,61 @@ public class ConverterView extends StackPane {
         pageRow.setVisible(visible);
         pageRow.setManaged(visible);
         updateToolbar();
+    }
+
+    /**
+     * Which steps are open, how far the rail runs, and what has just arrived.
+     *
+     * <p>Nothing is ever removed from the panel — step 4 vanishing is what made the numbering read
+     * as five unrelated things with one missing. A step that does not apply yet waits in place,
+     * dimmed, and the rail runs past it to the last one that is open, because a stop being skipped
+     * is still on the line.
+     */
+    private void updateSteps() {
+        if (steps.length == 0) {
+            return;
+        }
+        boolean haveFiles = !jobs.isEmpty();
+        // More than the "whole page, one file" entry means there is actually a grid to choose.
+        boolean cuttable = haveFiles && gridBox.getItems().size() > 1;
+        boolean[] open = { true, haveFiles, haveFiles, cuttable, haveFiles };
+
+        boolean[] was = new boolean[steps.length];
+        for (int i = 0; i < steps.length; i++) {
+            was[i] = !steps[i].isWaiting();
+            steps[i].setWaiting(!open[i]);
+        }
+
+        // Read back rather than assumed: a step the user opened by hand stays open.
+        int last = 0;
+        for (int i = 0; i < steps.length; i++) {
+            if (!steps[i].isWaiting()) {
+                last = i;
+            }
+        }
+        // Everything to its resting place first; the animation re-zeroes the segments it draws.
+        for (int i = 0; i < steps.length - 1; i++) {
+            steps[i].setRailDrawn(i < last);
+        }
+
+        List<Animations.Stage> cascade = new ArrayList<>();
+        Node anchor = null;
+        for (int i = 1; i < steps.length; i++) {
+            boolean arriving = !steps[i].isWaiting() && !was[i];
+            boolean extending = i > railTo && i <= last;
+            if (arriving || extending) {
+                cascade.add(new Animations.Stage(
+                    extending ? steps[i - 1].railScale() : null,
+                    arriving ? steps[i].arriving() : null));
+                if (arriving) {
+                    anchor = steps[i].arriving();
+                }
+            }
+        }
+        railTo = last;
+        if (anchor != null) {
+            Animations.timeline(anchor, cascade);
+        }
     }
 
     /** The strip under the picture is in the card only while it has something to say. */
@@ -1411,6 +1479,7 @@ public class ConverterView extends StackPane {
         }
         refreshGrids();
         updateTileCount();
+        updateSteps();
 
         if (job == null) {
             // Nothing selected, so there is nothing to draw a rectangle on — including when the

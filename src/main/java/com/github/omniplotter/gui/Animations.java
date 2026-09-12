@@ -2,6 +2,9 @@ package com.github.omniplotter.gui;
 
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.animation.ParallelTransition;
 import javafx.animation.SequentialTransition;
 import javafx.animation.Transition;
@@ -40,6 +43,9 @@ public final class Animations {
 
     private static final Duration VEIL = Duration.millis(120);
 
+    /** One segment of rail. Short: five of them in a row is the whole cascade's length. */
+    private static final Duration DRAW = Duration.millis(170);
+
     /**
      * The surfaces settling into place on first show: each fades in while rising the last few
      * pixels, one after the next from left to right. Seen once per launch.
@@ -60,6 +66,50 @@ public final class Animations {
             play(surface, step);
             delay = delay.add(STAGGER);
         }
+    }
+
+    /**
+     * One stage of a cascade down a timeline.
+     *
+     * @param rail the segment to draw, or null to arrive with no line to travel first
+     * @param content what fades in once the line gets there, or null for a stop being passed
+     */
+    public record Stage(javafx.scene.transform.Scale rail, Node content) {}
+
+    /**
+     * A line drawing itself down a panel, each stop's content arriving as it is reached.
+     *
+     * <p>One {@code SequentialTransition} rather than two timelines with matching delays, so the
+     * line reaching a badge and that badge's content arriving cannot drift apart on a slow machine
+     * — which is the one way this effect goes wrong.
+     *
+     * @param anchor the node the whole cascade is parked on, so a second run replaces it
+     */
+    public static void timeline(Node anchor, java.util.List<Stage> stages) {
+        if (stages.isEmpty()) {
+            return;
+        }
+        stop(anchor);
+
+        SequentialTransition all = new SequentialTransition();
+        for (Stage stage : stages) {
+            SequentialTransition one = new SequentialTransition();
+            if (stage.rail() != null) {
+                stage.rail().setY(0);
+                one.getChildren().add(new Timeline(new KeyFrame(DRAW,
+                    new KeyValue(stage.rail().yProperty(), 1, Interpolator.EASE_OUT))));
+            }
+            if (stage.content() != null) {
+                Node content = stage.content();
+                content.setOpacity(0);
+                content.setTranslateY(RISE_BY);
+                one.getChildren().add(new ParallelTransition(
+                    fade(content, 0, 1, RISE),
+                    rise(content, RISE_BY, 0, RISE)));
+            }
+            all.getChildren().add(one);
+        }
+        play(anchor, all);
     }
 
     /**
