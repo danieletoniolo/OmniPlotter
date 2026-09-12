@@ -101,13 +101,14 @@ public class ConverterView extends StackPane {
     private static final double GAP = 14;
 
     /**
-     * How much wheel makes one step.
+     * How much wheel makes one step, and how long it then waits.
      *
-     * <p>A notch is about forty; a trackpad sends a stream of much smaller ones for a single
-     * flick, which without a threshold and a rest between moves would cross three steps at once.
+     * <p>A notch is about forty. A trackpad sends something else entirely: a whole gesture of many
+     * small deltas followed by a tail of inertia that can run for a second or more, which counted
+     * as wheel crossed two or three steps for one flick.
      */
     private static final double WHEEL_STEP = 60;
-    private static final long WHEEL_REST = 400;
+    private static final long WHEEL_REST = 500;
 
     /** The output panel, open. */
     private static final double SETTINGS_WIDTH = 300;
@@ -200,6 +201,10 @@ public class ConverterView extends StackPane {
     private double wheelSince;
     private int wheelDirection;
     private long wheelAt;
+
+    /** Whether a trackpad gesture is in progress, and whether it has already moved a step. */
+    private boolean inGesture;
+    private boolean gestureSpent;
     /** Where you are in the document and in the grid, under the pair both are about. */
     private HBox previewToolbar;
     private HBox pageRow;
@@ -1206,6 +1211,19 @@ public class ConverterView extends StackPane {
      * you cannot finish reading is worse than a gesture that takes two flicks.
      */
     private void wireStepWheel() {
+        // A trackpad brackets its gesture, a wheel does not. Where the brackets arrive, one flick
+        // is one step however long the gesture runs; where they do not, the rest between moves is
+        // what separates one notch from the next.
+        settingsScroll.addEventFilter(ScrollEvent.SCROLL_STARTED, event -> {
+            inGesture = true;
+            gestureSpent = false;
+            wheelSince = 0;
+        });
+        settingsScroll.addEventFilter(ScrollEvent.SCROLL_FINISHED, event -> {
+            inGesture = false;
+            wheelSince = 0;
+        });
+
         settingsScroll.addEventFilter(ScrollEvent.SCROLL, event -> {
             double delta = event.getDeltaY();
             if (delta == 0) {
@@ -1219,6 +1237,12 @@ public class ConverterView extends StackPane {
             }
             event.consume();
 
+            // The tail of a flick is not a second flick, and neither is the rest of one that has
+            // already been answered.
+            if (event.isInertia() || (inGesture && gestureSpent)) {
+                return;
+            }
+
             if (direction != wheelDirection) {
                 wheelSince = 0;
                 wheelDirection = direction;
@@ -1231,6 +1255,7 @@ public class ConverterView extends StackPane {
             }
             wheelSince = 0;
             wheelAt = now;
+            gestureSpent = true;
             expandStep(StepSequence.next(applicable(), openStep, direction), true);
         });
     }
@@ -2410,6 +2435,21 @@ public class ConverterView extends StackPane {
         PauseTransition wait = new PauseTransition(Duration.millis(900));
         wait.setOnFinished(e -> help.startTour());
         wait.play();
+    }
+
+    /**
+     * The shortest the window can be before the panel starts losing steps off the bottom.
+     *
+     * <p>Measured rather than chosen. Each step carries a line of prose, and Italian wraps where
+     * English does not, so a number written into the source would be right in one language and cut
+     * the panel in the other. What is measured is the panel as it opens — step 1 open, the rest as
+     * titles; opening a taller one later is what the scroll bar is for.
+     */
+    public double shortestUsefulHeight() {
+        double panel = settingsScroll.getContent().prefHeight(SETTINGS_WIDTH - SCROLLBAR);
+        double dock = content.getBottom() instanceof Region bottom ? bottom.getHeight() : 0;
+        // A gap above the panel, one below it, and one under the action bar.
+        return panel + dock + 3 * GAP;
     }
 
     /**

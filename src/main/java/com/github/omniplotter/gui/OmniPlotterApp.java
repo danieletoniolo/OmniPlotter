@@ -65,6 +65,14 @@ public class OmniPlotterApp extends Application {
         });
 
         stage.show();
+
+        // Worked out from the panel now that there is something to measure, and clamped: the
+        // window may not be shorter than the steps need, and may not demand more of a small screen
+        // than it is reasonable to ask.
+        double decoration = stage.getHeight() - scene.getHeight();
+        stage.setMinHeight(Math.max(stage.getMinHeight(),
+            Math.min(900, Math.ceil(view.shortestUsefulHeight() + decoration))));
+
         view.playIntro();
     }
 
