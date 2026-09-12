@@ -47,7 +47,13 @@ public final class Settings {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    public static void set(String key, String value) {
+    /**
+     * Synchronized, like {@link #save()}, on the monitor {@link #values()} already uses.
+     *
+     * <p>The update check writes from its own thread while the window writes from the toolkit's, and
+     * {@code Properties.store} iterates what a concurrent write would be modifying underneath it.
+     */
+    public static synchronized void set(String key, String value) {
         if (value == null) {
             values().remove(key);
         } else {
@@ -100,7 +106,14 @@ public final class Settings {
         return Files.isDirectory(path) ? path : fallback;
     }
 
-    public static void save() {
+    /**
+     * Writes every value, from whichever thread got here first.
+     *
+     * <p>Two of these at once both truncate the same file with {@code newOutputStream} and can
+     * interleave into a half-written one — which is then read back as nonsense on the next launch
+     * and silently discarded, taking every remembered preference with it.
+     */
+    public static synchronized void save() {
         try {
             Files.createDirectories(AppPaths.config());
             try (OutputStream out = Files.newOutputStream(AppPaths.settingsFile())) {
