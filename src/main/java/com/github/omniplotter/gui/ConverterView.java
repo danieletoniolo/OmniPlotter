@@ -130,6 +130,8 @@ public class ConverterView extends StackPane {
     private final FlowPane lookChips = new FlowPane(6, 6);
     private final CheckBox fill = new CheckBox(Messages.get("image.fill"));
     private final ToggleButton cropToggle = new ToggleButton(Messages.get("image.crop"));
+    /** Why Crop is greyed out, which used to be something to work out. */
+    private final Label cropBlocked = new Label();
     private CropOverlay cropOverlay;
     private GridOverlay gridOverlay;
 
@@ -142,6 +144,12 @@ public class ConverterView extends StackPane {
     private final Button includeAll = new Button(Messages.get("tiles.includeAll"));
     private final Button applyToPages = new Button(Messages.get("tiles.applyToPages"));
     private VBox tileControls;
+    /** The step that appears with a file to cut up, so it can be hidden when there is none. */
+    private StepSection tilesSection;
+    /** Where you are in the document and in the grid, under the picture both are about. */
+    private VBox previewToolbar;
+    private HBox pageRow;
+    private HBox tileRow;
     private final Label pageLabel = new Label();
     private final Button previousPage = new Button("\u2039");
     private final Button nextPage = new Button("\u203a");
@@ -392,8 +400,10 @@ public class ConverterView extends StackPane {
         StackPane overlays = new StackPane(gridOverlay, cropOverlay);
         overlays.setPickOnBounds(false);
 
-        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays, sourceCaption);
-        previewPane = previewCard(Messages.get("preview.output"), previewView, null, previewCaption, sizeWarning);
+        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays,
+            buildPreviewToolbar(), sourceCaption);
+        previewPane = previewCard(Messages.get("preview.output"), previewView, null, null,
+            previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
         // being produced. An accent edge is enough; the caption underneath already names the format.
         previewPane.getStyleClass().add("result");
@@ -404,7 +414,8 @@ public class ConverterView extends StackPane {
         return row;
     }
 
-    private Node previewCard(String title, ImageView view, Node overlay, Label... captions) {
+    private Node previewCard(String title, ImageView view, Node overlay, Node toolbar,
+                             Label... captions) {
         Label heading = new Label(title);
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
@@ -424,6 +435,11 @@ public class ConverterView extends StackPane {
         captions[0].setWrapText(true);
 
         VBox card = new VBox(8, heading, frame);
+        // Under the picture rather than over it: it says what is on screen, which is something
+        // read after looking rather than before.
+        if (toolbar != null) {
+            card.getChildren().add(toolbar);
+        }
         card.getChildren().addAll(captions);
         card.getStyleClass().addAll("glass", "liftable");
         card.setPadding(new Insets(16));
@@ -492,23 +508,28 @@ public class ConverterView extends StackPane {
         onCalcHint.getStyleClass().add(Styles.TEXT_MUTED);
         onCalcHint.setWrapText(true);
 
-        VBox panel = new VBox(12,
+        // Numbered, and in the order a conversion actually happens: which calculator, how big,
+        // how it should look, how to cut it up, what to call it. The old panel was one column of
+        // labelled controls with no order stated and the whole document half folded away inside a
+        // section called "Image".
+        VBox panel = new VBox(16,
             title,
-            field(Messages.get("settings.mode"), modeBox),
-            field(Messages.get("settings.calculator"), targetBox),
-            field(Messages.get("settings.format"), formatBox),
-            new Separator(),
-            field(Messages.get("settings.canvas"), size),
-            presetChips,
-            field(Messages.get("settings.colours"), colorsSpinner),
-            keepRatio,
-            enlargeSmaller,
-            new Separator(),
-            buildImageControls(),
-            new Separator(),
-            field(Messages.get("settings.name"), onCalcName),
-            field(Messages.get("settings.slot"), onCalcNumber),
-            onCalcHint);
+            new StepSection(1, Messages.get("step.calculator"), Messages.get("step.calculator.says"))
+                .with(field(Messages.get("settings.mode"), modeBox),
+                    field(Messages.get("settings.calculator"), targetBox),
+                    field(Messages.get("settings.format"), formatBox)),
+            new StepSection(2, Messages.get("step.canvas"), Messages.get("step.canvas.says"))
+                .with(field(Messages.get("settings.canvas"), size),
+                    presetChips,
+                    field(Messages.get("settings.colours"), colorsSpinner),
+                    keepRatio,
+                    enlargeSmaller),
+            pictureStep(),
+            tilesStep(),
+            new StepSection(5, Messages.get("step.name"), Messages.get("step.name.says"))
+                .with(field(Messages.get("settings.name"), onCalcName),
+                    field(Messages.get("settings.slot"), onCalcNumber),
+                    onCalcHint));
         panel.setPadding(new Insets(16));
 
         ScrollPane scroll = new ScrollPane(panel);
@@ -523,37 +544,12 @@ public class ConverterView extends StackPane {
     /**
      * The controls the reference does not have.
      *
-     * <p>Folded away by default. They are the ones most conversions never need, and the panel is
-     * already long enough that putting five more sliders permanently at eye level would bury the
-     * format picker that every conversion does need.
+     * <p>Folded away by default, and the one step that is: they are what most conversions leave
+     * alone, and five sliders permanently at eye level bury the format picker that every
+     * conversion needs. What is no longer folded in with them is the page grid, which was the
+     * whole document feature hidden behind a chevron labelled "Image".
      */
-    private Node buildImageControls() {
-        Label heading = new Label(Messages.get("image.title"));
-        heading.getStyleClass().add(Styles.TEXT_CAPTION);
-
-        VBox body = new VBox(10);
-        body.setVisible(false);
-        body.setManaged(false);
-
-        // Built by hand rather than through iconButton: the handler has to swap the button's own
-        // graphic, which it cannot do from a Runnable created before the button exists.
-        Button fold = new Button(null, new FontIcon(Feather.CHEVRON_DOWN));
-        fold.getStyleClass().addAll(Styles.BUTTON_ICON, Styles.FLAT);
-        fold.setTooltip(new Tooltip(Messages.get("image.show")));
-        fold.setOnAction(e -> {
-            boolean showing = !body.isVisible();
-            body.setVisible(showing);
-            body.setManaged(showing);
-            fold.setGraphic(new FontIcon(showing ? Feather.CHEVRON_UP : Feather.CHEVRON_DOWN));
-            // It used to go on offering to show what was already showing.
-            fold.setTooltip(new Tooltip(Messages.get(showing ? "image.hide" : "image.show")));
-        });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(8, heading, spacer, fold);
-        header.setAlignment(Pos.CENTER_LEFT);
-
+    private StepSection pictureStep() {
         // A look writes its numbers into the sliders and is then forgotten, so what the panel shows
         // is always what will actually be applied.
         for (Look look : Look.values()) {
@@ -611,6 +607,36 @@ public class ConverterView extends StackPane {
         HBox cropRow = new HBox(6, cropToggle, clearCrop);
         cropRow.setAlignment(Pos.CENTER_LEFT);
 
+        // Crop greys out under a grid, and used to do it in silence. Being told which of the two
+        // controls is in the way is the difference between a rule and a broken button.
+        cropBlocked.getStyleClass().add("step-subtitle");
+        cropBlocked.setWrapText(true);
+        cropBlocked.setText(Messages.get("image.crop.blocked"));
+        cropBlocked.setVisible(false);
+        cropBlocked.setManaged(false);
+
+        return new StepSection(3, Messages.get("step.picture"), Messages.get("step.picture.says"))
+            .with(lookChips,
+                field(Messages.get("image.dither"), ditherBox),
+                slider(Messages.get("image.brightness"), brightness),
+                slider(Messages.get("image.contrast"), contrast),
+                slider(Messages.get("image.gamma"), gamma),
+                slider(Messages.get("image.saturation"), saturation),
+                slider(Messages.get("image.sharpen"), sharpen),
+                fill,
+                cropRow,
+                cropBlocked)
+            .foldable(true);
+    }
+
+    /**
+     * Cutting a page into pieces that each fill the screen.
+     *
+     * <p>A step of its own, shown whenever there is a file to cut up. Stepping through the pieces
+     * and switching one off are not here: those are about the piece on screen, so they are on the
+     * picture — {@link #buildPreviewToolbar()}. What is left is what applies to the whole grid.
+     */
+    private StepSection tilesStep() {
         gridBox.setMaxWidth(Double.MAX_VALUE);
         // The resolution is a property of the grid; how tall a line of type ends up is only
         // meaningful next to the size it was worked out for, so the label says which size that is
@@ -622,21 +648,6 @@ public class ConverterView extends StackPane {
                 String.format("%.0f", grid.lineHeight()))));
         gridBox.valueProperty().addListener((o, was, now) -> gridSelected(now));
 
-        // Stepping through the pieces, because seeing one of twelve and having to guess at the
-        // rest is most of the way to not being able to judge the grid at all.
-        previousTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
-        nextTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
-        previousTile.setOnAction(e -> stepTile(-1));
-        nextTile.setOnAction(e -> stepTile(1));
-        tileLabel.getStyleClass().add(Styles.TEXT_MUTED);
-        HBox tileNav = new HBox(8, previousTile, tileLabel, nextTile);
-        tileNav.setAlignment(Pos.CENTER_LEFT);
-
-        excludeTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
-        excludeTile.setOnAction(e -> {
-            gridOverlay.toggleExcluded(focusedTile);
-            updateTileCount();
-        });
         includeAll.getStyleClass().addAll(Styles.SMALL, Styles.FLAT);
         includeAll.setOnAction(e -> {
             gridOverlay.includeEverything();
@@ -646,38 +657,61 @@ public class ConverterView extends StackPane {
         applyToPages.setTooltip(new Tooltip(Messages.get("tiles.applyToPages.tip")));
         applyToPages.setOnAction(e -> applyExclusionsEverywhere());
 
-        HBox tileButtons = new HBox(8, excludeTile, includeAll);
-        tileButtons.setAlignment(Pos.CENTER_LEFT);
+        HBox bulk = new HBox(8, includeAll, applyToPages);
+        bulk.setAlignment(Pos.CENTER_LEFT);
 
         tileCount.getStyleClass().add(Styles.TEXT_MUTED);
-        tileControls = new VBox(8, tileNav, tileButtons, applyToPages, tileCount);
+        tileControls = new VBox(8, bulk, tileCount);
 
+        tilesSection = new StepSection(4, Messages.get("step.tiles"), Messages.get("step.tiles.says"))
+            .with(field(Messages.get("tiles.grid"), gridBox), tileControls);
+        return tilesSection;
+    }
+
+    /**
+     * Where you are in the document, and in the grid, on the picture it is about.
+     *
+     * <p>Both of these steppers were in the settings panel, three hundred pixels from the image
+     * they page: the arrows were next to the setting that produced the grid rather than next to
+     * the thing they moved. Excluding comes with them, because it is about the piece on screen.
+     */
+    private Node buildPreviewToolbar() {
         previousPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
         nextPage.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
         previousPage.setOnAction(e -> turnPage(-1));
         nextPage.setOnAction(e -> turnPage(1));
         pageLabel.getStyleClass().add(Styles.TEXT_MUTED);
-        HBox pageRow = new HBox(8, previousPage, pageLabel, nextPage);
+
+        pageRow = new HBox(6, previousPage, pageLabel, nextPage);
         pageRow.setAlignment(Pos.CENTER_LEFT);
 
-        body.getChildren().addAll(
-            lookChips,
-            field(Messages.get("image.dither"), ditherBox),
-            slider(Messages.get("image.brightness"), brightness),
-            slider(Messages.get("image.contrast"), contrast),
-            slider(Messages.get("image.gamma"), gamma),
-            slider(Messages.get("image.saturation"), saturation),
-            slider(Messages.get("image.sharpen"), sharpen),
-            fill,
-            cropRow,
-            new Separator(),
-            field(Messages.get("tiles.grid"), gridBox),
-            tileControls,
-            pageRow);
+        // Stepping through the pieces, because seeing one of twelve and having to guess at the
+        // rest is most of the way to not being able to judge the grid at all.
+        previousTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        nextTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        previousTile.setOnAction(e -> stepTile(-1));
+        nextTile.setOnAction(e -> stepTile(1));
+        tileLabel.getStyleClass().add(Styles.TEXT_MUTED);
 
-        return new VBox(10, header, body);
+        excludeTile.getStyleClass().addAll(Styles.SMALL, Styles.BUTTON_OUTLINED);
+        excludeTile.setOnAction(e -> {
+            gridOverlay.toggleExcluded(focusedTile);
+            updateTileCount();
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        tileRow = new HBox(6, previousTile, tileLabel, nextTile, spacer, excludeTile);
+        tileRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(tileRow, Priority.ALWAYS);
+
+        previewToolbar = new VBox(6, pageRow, tileRow);
+        previewToolbar.getStyleClass().add("preview-toolbar");
+        previewToolbar.setVisible(false);
+        previewToolbar.setManaged(false);
+        return previewToolbar;
     }
-
     /**
      * A slider that reports when it has stopped moving.
      *
@@ -791,6 +825,8 @@ public class ConverterView extends StackPane {
             cropToggle.setSelected(false);
         }
         cropToggle.setDisable(grid != null);
+        cropBlocked.setVisible(grid != null);
+        cropBlocked.setManaged(grid != null);
 
         gridOverlay.setTiling(tiling);
         gridOverlay.setActive(grid != null);
@@ -855,6 +891,9 @@ public class ConverterView extends StackPane {
         boolean gridded = !tiling.isWhole();
         tileControls.setVisible(gridded);
         tileControls.setManaged(gridded);
+        tileRow.setVisible(gridded);
+        tileRow.setManaged(gridded);
+        updateToolbar();
         if (!gridded) {
             return;
         }
@@ -954,6 +993,10 @@ public class ConverterView extends StackPane {
     }
 
     private void updatePageControls(ConversionJob job) {
+        // Nothing to cut up when nothing is selected, and a grid picker offering to cut up
+        // nothing is a question rather than a control.
+        tilesSection.setShown(job != null);
+
         boolean document = job != null && job.isDocument();
         pageRowVisible(document);
         if (document) {
@@ -964,10 +1007,16 @@ public class ConverterView extends StackPane {
     }
 
     private void pageRowVisible(boolean visible) {
-        for (Node node : new Node[]{previousPage, nextPage, pageLabel}) {
-            node.setVisible(visible);
-            node.setManaged(visible);
-        }
+        pageRow.setVisible(visible);
+        pageRow.setManaged(visible);
+        updateToolbar();
+    }
+
+    /** The strip under the picture is in the card only while it has something to say. */
+    private void updateToolbar() {
+        boolean anything = pageRow.isManaged() || tileRow.isManaged();
+        previewToolbar.setVisible(anything);
+        previewToolbar.setManaged(anything);
     }
 
     /** The crop belongs to the image, not to the settings: each queued file keeps its own. */

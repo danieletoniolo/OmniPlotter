@@ -448,3 +448,45 @@
 .code-block .button:hover .ikonli-font-icon {
     -fx-icon-color: -color-accent-fg;
 }
+
+/* --- the numbered steps ------------------------------------------------------------------ */
+
+/*
+ * The number is the whole idea: it says there is an order and that this is a place in it. A filled
+ * circle rather than a bare digit, because a digit beside a title reads as part of the title.
+ */
+.step-number {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-text-fill: -color-fg-emphasis;
+    -fx-background-radius: 999px;
+    -fx-min-width: 20px;
+    -fx-min-height: 20px;
+    -fx-alignment: center;
+    -fx-font-size: 0.78em;
+    -fx-font-weight: bold;
+    -fx-padding: 0;
+}
+
+.step-title {
+    -fx-font-weight: bold;
+}
+
+/* The one line under a heading that says what the step is for. Muted and small: it is there to be
+   read once, and then to be skipped over every time after that. */
+.step-subtitle {
+    -fx-text-fill: -color-fg-muted;
+    -fx-font-size: 0.86em;
+}
+
+/* --- what is on screen, under the picture ------------------------------------------------ */
+
+/*
+ * Page and tile navigation, on the card whose image they move. Separated from the picture above it
+ * by a rule rather than by a gap, so it reads as belonging to that card and not as a row of
+ * controls that happens to sit below one.
+ */
+.preview-toolbar {
+    -fx-padding: 8px 2px 0 2px;
+    -fx-border-color: -color-border-muted transparent transparent transparent;
+    -fx-border-width: 1px 0 0 0;
+}
