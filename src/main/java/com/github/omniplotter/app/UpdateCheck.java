@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -151,7 +152,10 @@ public final class UpdateCheck {
      * in this list: no repository serves it, so nothing else is going to update it.
      */
     public static boolean isManagedInstall() {
-        String executable = ProcessHandle.current().info().command().orElse("");
+        // The application's own launcher rather than the running binary. ProcessHandle reports the
+        // JVM for any jar-based run, and a Homebrew or a distribution JDK sits under exactly the
+        // prefixes below — which switched the check off for everyone not on the packaged build.
+        String executable = CommandSetup.launcher().map(Path::toString).orElse("");
         return executable.startsWith("/opt/homebrew/")
             || executable.startsWith("/usr/local/Cellar/")
             || executable.startsWith("/usr/lib/")
