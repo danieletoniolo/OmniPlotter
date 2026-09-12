@@ -1612,11 +1612,21 @@ public class ConverterView extends StackPane {
         });
     }
 
+    /**
+     * The one filter that has to be right is the first: it is the one the dialog opens on.
+     *
+     * <p>It listed five raster extensions, so the button could not open a PDF at all — the whole
+     * document side of the application was reachable only by dragging a file onto the window.
+     */
     private void chooseFiles() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Add images");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
-            "Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"));
+        chooser.setTitle("Add files");
+        chooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("Images and documents",
+                "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff", "*.pdf"),
+            new FileChooser.ExtensionFilter("Images",
+                "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"),
+            new FileChooser.ExtensionFilter("Documents", "*.pdf"));
         List<File> chosen = chooser.showOpenMultipleDialog(stage);
         if (chosen != null) {
             addFiles(chosen);
