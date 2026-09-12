@@ -50,6 +50,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.ToggleButton;
@@ -220,7 +221,16 @@ public class ConverterView extends StackPane {
 
     private final ImageView sourceView = new ImageView();
     private final ImageView previewView = new ImageView();
+    /**
+     * The file's name, and the size beside it.
+     *
+     * <p>Two labels rather than one string, because only one of them may be shortened. Wrapped, a
+     * long name put the source caption on two lines while the preview's stayed on one, and the two
+     * cards came out at different heights; truncated as a single label, the ellipsis would eat the
+     * dimensions off the end, which are the half worth keeping.
+     */
     private final Label sourceCaption = new Label(Messages.get("preview.none"));
+    private final Label sourceDetail = new Label();
     private final Label previewCaption = new Label();
     private final Label sizeWarning = new Label();
 
@@ -462,7 +472,14 @@ public class ConverterView extends StackPane {
         StackPane overlays = new StackPane(gridOverlay, cropOverlay);
         overlays.setPickOnBounds(false);
 
-        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays, sourceCaption);
+        // One line each, so the two cards stay the same height and their pictures at the same
+        // level. What is too long is shortened rather than wrapped.
+        previewCaption.getStyleClass().add(Styles.TEXT_MUTED);
+        previewCaption.setTextOverrun(OverrunStyle.ELLIPSIS);
+        previewCaption.setMinWidth(0);
+
+        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays,
+            captionRow());
         previewPane = previewCard(Messages.get("preview.output"), previewView, null,
             previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
@@ -483,7 +500,40 @@ public class ConverterView extends StackPane {
         return both;
     }
 
-    private Node previewCard(String title, ImageView view, Node overlay, Label... captions) {
+    /**
+     * The name on the left, ellipsised, and the size on the right, never.
+     *
+     * <p>A Label in an HBox will not shrink below the width of its own text unless it is told it
+     * may, so the minimum has to be cleared by hand: without that there is nothing to truncate and
+     * the row simply overflows.
+     */
+    private Node captionRow() {
+        sourceCaption.getStyleClass().add(Styles.TEXT_MUTED);
+        sourceCaption.setWrapText(false);
+        sourceCaption.setTextOverrun(OverrunStyle.ELLIPSIS);
+        sourceCaption.setMinWidth(0);
+        HBox.setHgrow(sourceCaption, Priority.ALWAYS);
+
+        sourceDetail.getStyleClass().add(Styles.TEXT_MUTED);
+        sourceDetail.setMinWidth(Region.USE_PREF_SIZE);
+
+        HBox row = new HBox(0, sourceCaption, sourceDetail);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setMinWidth(0);
+        return row;
+    }
+
+    /** Whatever is being said about the source, with the part that may be cut kept separate. */
+    private void sayAboutSource(String name, String detail) {
+        sourceCaption.setText(name);
+        // The whole of it is worth having when it has been shortened, and costs nothing when not.
+        sourceCaption.setTooltip(detail.isEmpty() ? null : new Tooltip(name + detail));
+        sourceDetail.setText(detail);
+        sourceDetail.setVisible(!detail.isEmpty());
+        sourceDetail.setManaged(!detail.isEmpty());
+    }
+
+    private Node previewCard(String title, ImageView view, Node overlay, Node... captions) {
         Label heading = new Label(title);
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
@@ -498,9 +548,6 @@ public class ConverterView extends StackPane {
         frame.setPrefSize(0, 220);
         view.fitWidthProperty().bind(frame.widthProperty().subtract(24));
         view.fitHeightProperty().bind(frame.heightProperty().subtract(24));
-
-        captions[0].getStyleClass().add(Styles.TEXT_MUTED);
-        captions[0].setWrapText(true);
 
         VBox card = new VBox(8, heading, frame);
         card.getChildren().addAll(captions);
@@ -1527,7 +1574,7 @@ public class ConverterView extends StackPane {
             restoreCropTool(null);
             Animations.swap(sourceView, null);
             Animations.swap(previewView, null);
-            sourceCaption.setText(Messages.get("preview.none"));
+            sayAboutSource(Messages.get("preview.none"), "");
             previewCaption.setText("");
             return;
         }
@@ -1536,10 +1583,10 @@ public class ConverterView extends StackPane {
             Animations.swap(sourceView, null);
             cropOverlay.setImage(0, 0, null);
             restoreCropTool(null);
-            sourceCaption.setText(Messages.get("preview.unreadable", job.error()));
+            sayAboutSource(Messages.get("preview.unreadable", job.error()), "");
         } else {
             Animations.swap(sourceView, SwingFXUtils.toFXImage(src, null));
-            sourceCaption.setText(Messages.get("preview.size", job.name(),
+            sayAboutSource(job.name(), Messages.get("preview.dimensions",
                 String.valueOf(src.getWidth()), String.valueOf(src.getHeight())));
             // Whatever was drawn on this image last time, back where it was. The rectangle shows
             // on any cropped image, so one says so without being asked; the tool itself comes back
