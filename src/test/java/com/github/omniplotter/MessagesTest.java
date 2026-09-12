@@ -1,5 +1,6 @@
 package com.github.omniplotter;
 
+import com.github.omniplotter.app.Messages;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -7,8 +8,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -44,8 +47,17 @@ class MessagesTest {
     }
 
     @Test
+    void bothLanguagesSayTheSameThings() throws Exception {
+        Set<String> english = new TreeSet<>(load("messages.properties").stringPropertyNames());
+        Set<String> italian = new TreeSet<>(load("messages_it.properties").stringPropertyNames());
+
+        assertEquals(english, italian, "the two bundles have drifted apart");
+        assertTrue(english.size() > 50, "suspiciously few messages: " + english.size());
+    }
+
+    @Test
     void anApostropheInAPatternIsWrittenTwice() throws Exception {
-        for (String file : List.of("messages.properties")) {
+        for (String file : List.of("messages.properties", "messages_it.properties")) {
             Properties values = load(file);
             for (String key : values.stringPropertyNames()) {
                 String value = values.getProperty(key);
@@ -63,7 +75,6 @@ class MessagesTest {
     @Test
     void everyKeyTheWindowAsksForExists() throws Exception {
         Properties english = load("messages.properties");
-        assertTrue(english.size() > 50, "suspiciously few messages: " + english.size());
         Set<String> missing = new LinkedHashSet<>();
 
         try (Stream<Path> sources = Files.walk(Path.of("src/main/java/com/github/omniplotter/gui"))) {
@@ -84,4 +95,12 @@ class MessagesTest {
         assertEquals(Set.of(), missing, "the window asks for messages that are not in the bundle");
     }
 
+    @Test
+    void aLanguageWithNoBundleFallsBackToEnglishAndNotToTheDesktop() {
+        assertEquals("Convert", Messages.bundleFor(Locale.ROOT).getString("dock.convert"));
+        assertEquals("Converti", Messages.bundleFor(Locale.of("it")).getString("dock.convert"));
+        // Without the no-fallback control this came back Italian when run on an Italian desktop,
+        // which is the whole reason that control is there.
+        assertEquals("Convert", Messages.bundleFor(Locale.of("fr")).getString("dock.convert"));
+    }
 }
