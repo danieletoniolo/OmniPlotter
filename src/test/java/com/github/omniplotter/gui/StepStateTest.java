@@ -32,6 +32,7 @@ class StepStateTest {
     void waitingAndClosedAreDifferentThings() {
         StepState state = new StepState(false);
         state.setWaiting(true);
+        state.setExplaining(true);
 
         // Both hide the body, which is why they have to look different on screen: the reason line
         // and the dimming belong to waiting alone, and a chevron makes no sense on it.
@@ -41,6 +42,19 @@ class StepStateTest {
         assertTrue(state.dimmed());
         assertFalse(state.chevronShown());
         assertFalse(state.clickable());
+    }
+
+    @Test
+    void aWaitingStepExplainsItselfOnlyWhenItIsTheOddOneOut() {
+        StepState state = new StepState(false);
+        state.setWaiting(true);
+
+        // With nothing to convert, every step past the first is dim and that is the whole story.
+        // One of them singling itself out to say why reads as a fault among four that keep quiet.
+        assertFalse(state.reasonShown());
+
+        state.setExplaining(true);
+        assertTrue(state.reasonShown(), "with a file loaded, a step still dim owes a reason");
     }
 
     @Test
@@ -59,6 +73,7 @@ class StepStateTest {
     @Test
     void aStepThatStopsApplyingClosesWithIt() {
         StepState state = new StepState(true);
+        state.setExplaining(true);
         assertTrue(state.bodyShown());
 
         state.setWaiting(true);

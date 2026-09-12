@@ -183,6 +183,12 @@ public class StepSection extends HBox {
         return state.isWaiting();
     }
 
+    /** Whether a step that does not apply has anything to explain itself against. */
+    public void setExplaining(boolean owed) {
+        state.setExplaining(owed);
+        apply();
+    }
+
     public boolean isExpanded() {
         return state.isExpanded();
     }

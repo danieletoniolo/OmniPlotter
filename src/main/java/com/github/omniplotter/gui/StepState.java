@@ -19,6 +19,9 @@ public final class StepState {
     private boolean waiting;
     private boolean expanded;
 
+    /** Whether a step that does not apply owes an explanation for it. */
+    private boolean explaining;
+
     public StepState(boolean expanded) {
         this.expanded = expanded;
     }
@@ -66,9 +69,21 @@ public final class StepState {
         return !waiting && expanded;
     }
 
-    /** The line that says why a step is waiting, which is the only time it is worth saying. */
+    /**
+     * Whether there is anything for a waiting step to explain itself against.
+     *
+     * <p>With nothing to convert, no step past the first applies and the panel says so by being a
+     * column of dim titles — a step singling itself out to explain why it is dim reads as a fault
+     * among four others that keep quiet. Once there is a file, a step that still does not apply is
+     * the odd one out, and then the reason is worth having.
+     */
+    public void setExplaining(boolean owed) {
+        explaining = owed;
+    }
+
+    /** The line that says why a step is waiting, which is not always worth saying. */
     public boolean reasonShown() {
-        return waiting;
+        return waiting && explaining;
     }
 
     /**

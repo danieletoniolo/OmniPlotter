@@ -1352,6 +1352,9 @@ public class ConverterView extends StackPane {
         for (int i = 0; i < steps.length; i++) {
             was[i] = !steps[i].isWaiting();
             steps[i].setWaiting(!open[i]);
+            // With nothing to convert, every step past the first is dim and that is the whole
+            // story. A file makes one that is still dim the odd one out, and worth a line.
+            steps[i].setExplaining(haveFiles);
         }
         // Everything to its resting place first; the animation re-zeroes the segments it draws.
         for (int i = 0; i < steps.length - 1; i++) {
