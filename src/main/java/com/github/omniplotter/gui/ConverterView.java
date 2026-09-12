@@ -175,6 +175,9 @@ public class ConverterView extends StackPane {
 
     /** How far down the rail is currently drawn, so the animation only ever extends it. */
     private int railTo;
+
+    /** Set while a recompute of the steps is already queued for the end of this gesture. */
+    private boolean stepsPending;
     /** Where you are in the document and in the grid, under the picture both are about. */
     private VBox previewToolbar;
     private HBox pageRow;
@@ -1096,6 +1099,21 @@ public class ConverterView extends StackPane {
      * is still on the line.
      */
     private void updateSteps() {
+        // Once per gesture, not once per signal. A file landing changes two things a beat apart —
+        // the queue, and then, once it is selected and its page measured, whether there is a grid
+        // to offer — and acting on each separately started the cascade and then cancelled it with
+        // a recompute in the same frame. Which is why every step arrived at once.
+        if (stepsPending) {
+            return;
+        }
+        stepsPending = true;
+        Platform.runLater(() -> {
+            stepsPending = false;
+            applySteps();
+        });
+    }
+
+    private void applySteps() {
         if (steps.length == 0) {
             return;
         }
@@ -1104,18 +1122,27 @@ public class ConverterView extends StackPane {
         boolean cuttable = haveFiles && gridBox.getItems().size() > 1;
         boolean[] open = { true, haveFiles, haveFiles, cuttable, haveFiles };
 
+        int last = 0;
+        for (int i = 0; i < steps.length; i++) {
+            if (open[i]) {
+                last = i;
+            }
+        }
+
+        // Nothing to say, and saying it anyway would snap a cascade that is still running to where
+        // it was going to end.
+        boolean changed = last != railTo;
+        for (int i = 0; i < steps.length; i++) {
+            changed |= steps[i].isWaiting() == open[i];
+        }
+        if (!changed) {
+            return;
+        }
+
         boolean[] was = new boolean[steps.length];
         for (int i = 0; i < steps.length; i++) {
             was[i] = !steps[i].isWaiting();
             steps[i].setWaiting(!open[i]);
-        }
-
-        // Read back rather than assumed: a step the user opened by hand stays open.
-        int last = 0;
-        for (int i = 0; i < steps.length; i++) {
-            if (!steps[i].isWaiting()) {
-                last = i;
-            }
         }
         // Everything to its resting place first; the animation re-zeroes the segments it draws.
         for (int i = 0; i < steps.length - 1; i++) {

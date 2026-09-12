@@ -43,8 +43,15 @@ public final class Animations {
 
     private static final Duration VEIL = Duration.millis(120);
 
-    /** One segment of rail. Short: five of them in a row is the whole cascade's length. */
-    private static final Duration DRAW = Duration.millis(170);
+    /**
+     * One segment of rail, and one step arriving behind it.
+     *
+     * <p>Both shorter than the window's other motion, because these run one after another: four of
+     * them at the length of the intro would be two seconds before the last step could be read,
+     * which is a cascade turning into a wait.
+     */
+    private static final Duration DRAW = Duration.millis(120);
+    private static final Duration ARRIVE = Duration.millis(220);
 
     /**
      * The surfaces settling into place on first show: each fades in while rising the last few
@@ -104,8 +111,8 @@ public final class Animations {
                 content.setOpacity(0);
                 content.setTranslateY(RISE_BY);
                 one.getChildren().add(new ParallelTransition(
-                    fade(content, 0, 1, RISE),
-                    rise(content, RISE_BY, 0, RISE)));
+                    fade(content, 0, 1, ARRIVE),
+                    rise(content, RISE_BY, 0, ARRIVE)));
             }
             all.getChildren().add(one);
         }

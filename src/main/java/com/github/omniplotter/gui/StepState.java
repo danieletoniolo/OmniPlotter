@@ -19,9 +19,6 @@ public final class StepState {
     private boolean waiting;
     private boolean folded;
 
-    /** Set once the user has opened a waiting step by hand, after which nothing closes it again. */
-    private boolean asked;
-
     public StepState(boolean folded) {
         this.folded = folded;
     }
@@ -34,27 +31,24 @@ public final class StepState {
         return folded;
     }
 
-    /**
-     * Whether this step applies yet.
-     *
-     * <p>Ignored when it would put away a step the user has asked to see: the sequence is a
-     * suggestion about what is worth filling in next, never a lock on a control.
-     */
+    /** Whether this step applies yet. */
     public void setWaiting(boolean wait) {
-        if (wait && asked) {
-            return;
-        }
         waiting = wait;
     }
 
+    /**
+     * Folds and unfolds — and does nothing at all while the step is waiting.
+     *
+     * <p>A waiting step opened by hand was offered first and taken out again: with no file loaded,
+     * clicking a dim heading put its controls on screen, which is a panel of settings for a
+     * conversion that has no subject. The dimming has to mean the step is not available, not that
+     * it is available and merely discouraged.
+     */
     public void toggleFold() {
+        if (waiting) {
+            return;
+        }
         folded = !folded;
-    }
-
-    /** Opens a waiting step for good. */
-    public void openByHand() {
-        asked = true;
-        waiting = false;
     }
 
     public boolean bodyShown() {
@@ -73,6 +67,11 @@ public final class StepState {
 
     /** Nothing to fold away while the step is not applicable in the first place. */
     public boolean chevronShown() {
+        return !waiting;
+    }
+
+    /** Whether a click anywhere on the heading does something, which is what the cursor says. */
+    public boolean clickable() {
         return !waiting;
     }
 

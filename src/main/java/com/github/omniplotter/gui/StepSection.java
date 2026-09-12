@@ -89,10 +89,12 @@ public class StepSection extends HBox {
         heading = new HBox(8, title);
         heading.setAlignment(Pos.CENTER_LEFT);
         heading.getStyleClass().add("step-heading");
-        // The whole heading, not just the chevron: a 20-pixel glyph is a small thing to find and a
-        // smaller one to hit, and a waiting step has no chevron at all to offer.
-        heading.setCursor(Cursor.HAND);
-        heading.setOnMouseClicked(e -> headingClicked());
+        // The whole heading, not just the chevron: a 20-pixel glyph is a small thing to find and
+        // a smaller one to hit. The cursor follows what a click would actually do.
+        heading.setOnMouseClicked(e -> {
+            state.toggleFold();
+            apply();
+        });
 
         content.getChildren().add(heading);
         if (subtitle != null) {
@@ -153,16 +155,10 @@ public class StepSection extends HBox {
         return this;
     }
 
-    private void headingClicked() {
-        if (state.isWaiting()) {
-            state.openByHand();
-        } else if (fold != null) {
-            state.toggleFold();
-        }
-        apply();
-    }
-
     public void setWaiting(boolean wait) {
+        if (state.isWaiting() == wait) {
+            return;
+        }
         state.setWaiting(wait);
         apply();
     }
@@ -191,6 +187,8 @@ public class StepSection extends HBox {
         if (state.isWaiting()) {
             badge.getStyleClass().add("waiting");
         }
+
+        heading.setCursor(state.clickable() && fold != null ? Cursor.HAND : Cursor.DEFAULT);
 
         if (fold != null) {
             show(fold, state.chevronShown());

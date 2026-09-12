@@ -58,15 +58,18 @@ class StepStateTest {
     }
 
     @Test
-    void aStepOpenedByHandStaysOpen() {
+    void aWaitingStepCannotBeOpenedByClickingIt() {
         StepState state = new StepState(false);
         state.setWaiting(true);
 
-        state.openByHand();
-        assertFalse(state.isWaiting());
+        state.toggleFold();
 
-        state.setWaiting(true);
-        assertFalse(state.isWaiting(), "an explicit request has to survive the next recompute");
+        // Offered first and taken out again: with no file loaded, clicking a dim heading put a
+        // panel of settings on screen for a conversion with no subject. Dimming has to mean the
+        // step is unavailable, not that it is available and merely discouraged.
+        assertTrue(state.isWaiting());
+        assertFalse(state.bodyShown());
+        assertFalse(state.clickable());
     }
 
     @Test
