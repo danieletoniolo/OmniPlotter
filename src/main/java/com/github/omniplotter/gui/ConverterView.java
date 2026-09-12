@@ -178,10 +178,11 @@ public class ConverterView extends StackPane {
 
     /** Set while a recompute of the steps is already queued for the end of this gesture. */
     private boolean stepsPending;
-    /** Where you are in the document and in the grid, under the picture both are about. */
-    private VBox previewToolbar;
+    /** Where you are in the document and in the grid, under the pair both are about. */
+    private HBox previewToolbar;
     private HBox pageRow;
     private HBox tileRow;
+    private Separator navSeparator;
     private final Label pageLabel = new Label();
     private final Button previousPage = new Button("\u2039");
     private final Button nextPage = new Button("\u203a");
@@ -461,9 +462,8 @@ public class ConverterView extends StackPane {
         StackPane overlays = new StackPane(gridOverlay, cropOverlay);
         overlays.setPickOnBounds(false);
 
-        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays,
-            buildPreviewToolbar(), sourceCaption);
-        previewPane = previewCard(Messages.get("preview.output"), previewView, null, null,
+        sourcePane = previewCard(Messages.get("preview.source"), sourceView, overlays, sourceCaption);
+        previewPane = previewCard(Messages.get("preview.output"), previewView, null,
             previewCaption, sizeWarning);
         // The two cards were identical, which left nothing saying which of the images is the one
         // being produced. An accent edge is enough; the caption underneath already names the format.
@@ -472,11 +472,18 @@ public class ConverterView extends StackPane {
         HBox.setHgrow(previewPane, Priority.ALWAYS);
 
         HBox row = new HBox(GAP, sourcePane, previewPane);
-        return row;
+        VBox.setVgrow(row, Priority.ALWAYS);
+
+        // Under both cards rather than inside one of them. Turning a page or picking a tile
+        // changes what each of them shows, so the controls belong to the pair — and carried by
+        // the source card alone they made it shorter than the one beside it, which left the two
+        // pictures at different heights and their captions on different lines.
+        VBox both = new VBox(GAP, row, buildPreviewToolbar());
+        both.setAlignment(Pos.CENTER);
+        return both;
     }
 
-    private Node previewCard(String title, ImageView view, Node overlay, Node toolbar,
-                             Label... captions) {
+    private Node previewCard(String title, ImageView view, Node overlay, Label... captions) {
         Label heading = new Label(title);
         heading.getStyleClass().add(Styles.TEXT_CAPTION);
 
@@ -496,11 +503,6 @@ public class ConverterView extends StackPane {
         captions[0].setWrapText(true);
 
         VBox card = new VBox(8, heading, frame);
-        // Under the picture rather than over it: it says what is on screen, which is something
-        // read after looking rather than before.
-        if (toolbar != null) {
-            card.getChildren().add(toolbar);
-        }
         card.getChildren().addAll(captions);
         card.getStyleClass().addAll("glass", "liftable");
         card.setPadding(new Insets(16));
@@ -761,7 +763,7 @@ public class ConverterView extends StackPane {
         pageLabel.getStyleClass().add(Styles.TEXT_MUTED);
 
         pageRow = new HBox(6, previousPage, pageLabel, nextPage);
-        pageRow.setAlignment(Pos.CENTER_LEFT);
+        pageRow.setAlignment(Pos.CENTER);
         pageRow.setVisible(false);
         pageRow.setManaged(false);
 
@@ -779,17 +781,22 @@ public class ConverterView extends StackPane {
             updateTileCount();
         });
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        tileRow = new HBox(6, previousTile, tileLabel, nextTile, spacer, excludeTile);
-        tileRow.setAlignment(Pos.CENTER_LEFT);
+        tileRow = new HBox(8, previousTile, tileLabel, nextTile, excludeTile);
+        tileRow.setAlignment(Pos.CENTER);
         tileRow.setVisible(false);
         tileRow.setManaged(false);
-        HBox.setHgrow(tileRow, Priority.ALWAYS);
 
-        previewToolbar = new VBox(6, pageRow, tileRow);
+        // Between the two halves, and only while there are two halves to divide.
+        navSeparator = new Separator(javafx.geometry.Orientation.VERTICAL);
+        navSeparator.setVisible(false);
+        navSeparator.setManaged(false);
+
+        // A pill that hugs what is in it, so it sits centred under the pair rather than stretching
+        // across whatever width the window happens to have.
+        previewToolbar = new HBox(14, pageRow, navSeparator, tileRow);
+        previewToolbar.setAlignment(Pos.CENTER);
         previewToolbar.getStyleClass().add("preview-toolbar");
+        previewToolbar.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         previewToolbar.setVisible(false);
         previewToolbar.setManaged(false);
         return previewToolbar;
@@ -1169,8 +1176,12 @@ public class ConverterView extends StackPane {
         }
     }
 
-    /** The strip under the picture is in the card only while it has something to say. */
+    /** The strip is under the pair only while it has something to say, and so is its divider. */
     private void updateToolbar() {
+        boolean both = pageRow.isManaged() && tileRow.isManaged();
+        navSeparator.setVisible(both);
+        navSeparator.setManaged(both);
+
         boolean anything = pageRow.isManaged() || tileRow.isManaged();
         previewToolbar.setVisible(anything);
         previewToolbar.setManaged(anything);

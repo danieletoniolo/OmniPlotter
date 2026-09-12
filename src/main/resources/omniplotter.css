@@ -483,14 +483,24 @@
 /* --- what is on screen, under the picture ------------------------------------------------ */
 
 /*
- * Page and tile navigation, on the card whose image they move. Separated from the picture above it
- * by a rule rather than by a gap, so it reads as belonging to that card and not as a row of
- * controls that happens to sit below one.
+ * Page and tile navigation, centred under both cards. It was inside the source card, which made
+ * that card taller than the one beside it: two pictures at different heights with their captions
+ * on different lines. Turning a page changes both previews anyway, so it never belonged to one.
+ *
+ * A pill in the same material as the action bar, hugging its contents, so a row of controls
+ * floating over the backdrop reads as a surface rather than as something left behind.
  */
 .preview-toolbar {
-    -fx-padding: 8px 2px 0 2px;
-    -fx-border-color: -color-border-muted transparent transparent transparent;
-    -fx-border-width: 1px 0 0 0;
+    -fx-background-color:
+        -op-dock-fill,
+        linear-gradient(to bottom, -op-glass-sheen 0%, transparent 55%);
+    -fx-background-radius: 999px, 999px;
+    -fx-background-insets: 0, 1px;
+    -fx-border-color: -op-glass-stroke;
+    -fx-border-radius: 999px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, -op-shadow, 14, 0.0, 0, 4);
+    -fx-padding: 7px 16px;
 }
 
 /* --- the tour and the help panel --------------------------------------------------------- */
