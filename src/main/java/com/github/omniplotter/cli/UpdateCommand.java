@@ -49,7 +49,11 @@ public class UpdateCommand implements Callable<Integer> {
         }
 
         if (latest.isEmpty()) {
-            System.out.println("No releases have been published yet.");
+            // Both reach here as a redirect with no tag in it, and from the outside they are the
+            // same answer: a private repository answers 404, and one with no releases redirects
+            // to its releases page.
+            System.out.println("No releases were found there.");
+            System.out.println("The repository is private, or has published none yet.");
             return 0;
         }
 
