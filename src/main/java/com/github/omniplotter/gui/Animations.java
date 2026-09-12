@@ -10,6 +10,7 @@ import javafx.animation.ParallelTransition;
 import javafx.animation.SequentialTransition;
 import javafx.animation.TranslateTransition;
 import javafx.scene.Node;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Region;
@@ -140,6 +141,18 @@ public final class Animations {
             resize.setOnFinished(e -> after.run());
         }
         play(region, resize);
+    }
+
+    /**
+     * A panel moving to where it has to look, rather than arriving there.
+     *
+     * <p>Setting the value outright is a jump in the middle of everything else that is easing, and
+     * reads as the animation stuttering rather than as the panel scrolling.
+     */
+    public static void scrollTo(ScrollPane pane, double vvalue) {
+        stop(pane);
+        play(pane, new Timeline(new KeyFrame(OPEN,
+            new KeyValue(pane.vvalueProperty(), vvalue, Interpolator.EASE_BOTH))));
     }
 
     /**

@@ -199,35 +199,59 @@ public class StepSection extends HBox {
     /**
      * Opens or closes the part under the heading.
      *
-     * <p>The height has to be measured before it can be animated to, and it has to be let go of
-     * afterwards: pinned at what it measured, a step whose contents change later — the line about
-     * the crop appearing under a grid, the tile controls arriving in step 4 — would be cut off at
-     * the height it had when it opened.
+     * <p><b>A box will not go below the sum of its children's minimums.</b> That was the whole
+     * fault: a column of sliders and a wrapped label reports a minimum of its own full height, so
+     * driving the preferred height down to zero did nothing at all. It sat at full size for most
+     * of the animation and then moved in the last few frames, which is what a jump is. Clearing
+     * the minimum for the duration is what lets it close at all.
+     *
+     * <p>The target is what the box asks for at the width it is going to get, which is the height
+     * the layout then settles on — checked against a real layout pass rather than assumed, because
+     * a target that is out by even a few pixels snaps when the height is handed back.
      */
     private void showCollapsible(boolean open, boolean animate) {
         if (!animate) {
-            collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE);
+            release();
             show(collapsible, open);
             return;
         }
         if (open) {
             show(collapsible, true);
             double target = collapsible.prefHeight(width());
+
+            collapsible.setMinHeight(0);
             collapsible.setPrefHeight(0);
-            Animations.height(collapsible, target,
-                () -> collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE));
+            Animations.height(collapsible, target, this::release);
         } else {
             // From where it actually is: USE_COMPUTED_SIZE is -1, and animating from that would
             // take the whole thing away in the first frame.
+            collapsible.setMinHeight(0);
             collapsible.setPrefHeight(collapsible.getHeight());
             Animations.height(collapsible, 0, () -> {
                 show(collapsible, false);
-                collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE);
+                release();
             });
         }
     }
 
-    /** What to measure the height against, before a first layout has given it one. */
+    /**
+     * Hands the height back to the layout.
+     *
+     * <p>Left pinned at what it measured, a step whose contents change later — the line about the
+     * crop appearing under a grid, the tile controls arriving in step 4 — would be cut off at the
+     * height it had when it opened.
+     */
+    private void release() {
+        collapsible.setMinHeight(Region.USE_COMPUTED_SIZE);
+        collapsible.setPrefHeight(Region.USE_COMPUTED_SIZE);
+    }
+
+    /**
+     * The width to measure the height against.
+     *
+     * <p>Its own, once it has been laid out at least once, and the column it sits in before that —
+     * they are the same number, since nothing between them has horizontal padding.
+     */
     private double width() {
         double laid = collapsible.getWidth() > 0 ? collapsible.getWidth() : content.getWidth();
         return laid > 0 ? laid : -1;

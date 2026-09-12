@@ -1292,7 +1292,7 @@ public class ConverterView extends StackPane {
                 return;   // nothing is hidden, so nothing needs moving
             }
             double where = step.getBoundsInParent().getMinY() / (content - viewport);
-            settingsScroll.setVvalue(Math.max(0, Math.min(1, where)));
+            Animations.scrollTo(settingsScroll, Math.max(0, Math.min(1, where)));
         });
         settle.play();
     }
