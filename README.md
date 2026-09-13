@@ -1,21 +1,101 @@
-# OmniPlotter
+<p align="center">
+  <img src="src/main/resources/icon/icon.png" width="120" alt="OmniPlotter">
+</p>
 
-A desktop application that puts your pictures on a graphing calculator. It converts images into the
-picture and script formats calculators can open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` /
-`.8ca` / `.8ci` / `.8xi` and friends, the Zero `pic`, and the Python generators for kandinsky,
-casioplot, gint, ti_draw, nsp and hpprime.
+<h1 align="center">OmniPlotter</h1>
 
-It also takes a PDF or a large scan and cuts it into pieces that each fill the calculator's screen,
-which is what makes a page of notes readable on one.
+<p align="center">
+  <b>Put your pictures and your notes on a graphing calculator.</b><br>
+  Images and PDFs in, files your Casio, TI, NumWorks or HP opens out.
+</p>
 
-There is a window and there is a command line, and they are the same program: the installed
-application runs as either.
+<p align="center">
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/danieletoniolo/OmniPlotter?label=release&color=1f6feb"></a>
+  <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://github.com/danieletoniolo/OmniPlotter/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="macOS, Windows and Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-555">
+  <a href="LICENSE"><img alt="GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue"></a>
+</p>
 
-The file formats come from [TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), and the
-encoders are checked byte for byte against it — 591 golden vectors, every format, all matching. What
-is built on top of them is this project's own: the window, PDFs cut into tiles, the photo and
-document treatments, reading a calculator file back apart, and a command line for whole folders at
-once.
+<p align="center">
+  <a href="../../releases/latest"><b>Download</b></a> &nbsp;·&nbsp;
+  <a href="#supported-calculators">Supported calculators</a> &nbsp;·&nbsp;
+  <a href="#command-line">Command line</a> &nbsp;·&nbsp;
+  <a href="#building-it">Build from source</a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tiles-dark.png">
+  <img alt="A page of lecture notes cut into twelve tiles, one of them shown exactly as the calculator will display it" src="docs/screenshots/tiles-light.png">
+</picture>
+
+## See the result before anything is written
+
+The preview beside your picture is not a scaled-down copy of it: it is the output, the same pixels
+the encoder is about to write. The dithering and the colour banding a calculator's palette brings
+are there to judge before a file exists, and so is the warning when a file will be too big for the
+calculator to take.
+
+Photo and document treatments, brightness, contrast, gamma, saturation and sharpening, a crop drawn
+on the picture and a fill that crops to the screen's proportions — each defaulting to exactly what
+the reference converter does.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/photo-dark.png">
+  <img alt="A fractal image beside its calculator preview, with the picture controls open" src="docs/screenshots/photo-light.png">
+</picture>
+
+## Notes you can actually read
+
+A whole A4 page on a 384-pixel screen is a postage stamp. OmniPlotter renders a PDF — or a large
+scan — at the resolution the screen needs and cuts it into tiles that each fill it. Instead of asking
+how many pieces you want, it tells you what each grid gives: the dots per inch it reaches, and how
+tall a line of type ends up.
+
+Step through the tiles on the picture, switch off the running header nobody wants on a calculator,
+and convert the page on screen or the whole document.
+
+## A window that explains itself
+
+The panel asks its questions in the order a conversion happens — which calculator, how big, how it
+should look, how to cut a page up, what the calculator should call it — and only the ones that apply
+to what you dropped. A short tour points at each part of the window, and a panel of concepts
+explains what a slot is, why only columns buy resolution, and why a format is called `cp.g3p`.
+
+In English and Italian, light or dark.
+
+<p align="center">
+  <img alt="The tour pointing at the two previews" src="docs/screenshots/tour.png" width="85%">
+</p>
+
+## Files the calculator will open
+
+These containers carry the same length in several places, plus checksums derived from it. One wrong
+byte and the calculator refuses the file without saying why. The file formats come from
+[TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), and every encoder is checked byte
+for byte against it: **591 golden vectors, every format, all matching** — see
+[Correctness](#correctness). Everything built around them is this project's own.
+
+## Supported calculators
+
+| Brand | Models | Picture files | Python scripts |
+|---|---|---|---|
+| Casio | fx-CG10/20/50 · Graph 90+E | `cp.g3p` `cp01.g3p` `cp_i.g3p` `cp01_i.g3p` | `graphic_cg.py` `gint_cg.py` `kandinsky_cg.py` |
+| Casio | fx-CG50/100 · Graph 90+E/Math+ | | `casioplot_cg.py` `graphic_cg.py` `gint_cg.py` `kandinsky_cg.py` |
+| Casio | fx-CG100 · Graph Math+ | `cp01.g4p` `cp01_i.g4p` `cp.g3p` `cp01.g3p` `cp_i.g3p` `cp01_i.g3p` | |
+| Casio | fx-CP400 · CG500 | `c2p` `i.c2p` | |
+| Casio | fx-9750/9860GIII · Graph 35+E II | | `casioplot_g3.py` `graphic_g3.py` `gint_g3.py` |
+| Casio | fx-9860G/GII · fx-9750GII · Graph 35+E/75/85/95 | | `graphic_g3.py` `gint_g3.py` |
+| TI | 83 Premium CE · 84 Plus CE Python | `im8c.8xv` `8ca` `8ci` | `ti_graphics.py` `ti_draw_ce.py` `microbit.py` `ti_hub_mb.py` `ti_hub_rgbarr.py` |
+| TI | 82 Advanced Python · 83 Premium CE · 84 Plus CE/CSE | `8ca` `8ci` | |
+| TI | 82+ · 82 Advanced · 83+ · 84+ | `8xi` | |
+| TI | 73 · 76 · 82 · 82 Stats · 83 · 85 · 86 | `8xi` `73i` `82i` `83i` `85i` `86i` | |
+| TI | Nspire · CM · CX · CX II | | `nsp_ns.py` `nsp_cx.py` `graphic.py` `kandinsky.py` `ti_draw_cx.py` `microbit.py` `ti_hub_mb.py` `ti_hub_rgbarr.py` |
+| NumWorks | N0100 · N0110 · N0120 | | `kandinsky.py` `graphic.py` |
+| HP | Prime | | `hpprime.py` |
+| Zero | ZGC1–ZGC4 | `zpic` | |
+
+`omniplotter targets` lists every model with its identifier, and `omniplotter formats --target <id>`
+the formats it takes.
 
 ## Installing
 
@@ -28,20 +108,6 @@ Settings → Privacy & Security after the refusal and choose "Open Anyway"; the 
 route is no longer reliable on recent versions. From a terminal,
 `xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` does the same. On Windows,
 SmartScreen wants "More info" → "Run anyway".
-
-## The window
-
-Drop images or a PDF onto the window, or click the empty list to pick them. The panel on the right
-asks its questions in the order a conversion happens — which calculator, how big, how it should
-look, how to cut a page up, what the calculator should call the file — and only asks the ones that
-apply to what you dropped.
-
-The preview beside the source is not a scaled-down copy of it: it is the actual preprocessed image,
-the same pixels the encoder will consume, so the dithering and the palette banding are visible
-before anything is written. It says up front when a file will be too big for the calculator to
-take, rather than letting you find out at transfer time.
-
-The window is in English and Italian, and follows the desktop's light or dark setting.
 
 ## Command line
 
