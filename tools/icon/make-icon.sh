@@ -18,6 +18,12 @@ S=1024                     # master size; everything scales down from here
 SW=$((S * 664 / 1024))     # screen width
 SH=$((S * 456 / 1024))     # screen height
 
+# Vertical layout, in the same 1024 units. The bezel, the gap under it and the row of keys are one
+# block, centred in the body by arithmetic rather than by eye: placed by hand it sat 18 units low.
+BODY_TOP=56; BODY_H=912
+BEZEL_H=512; KEY_GAP=68; KEY_H=64
+TOP=$((BODY_TOP + (BODY_H - (BEZEL_H + KEY_GAP + KEY_H)) / 2))
+
 # The picture on the screen: a sky gradient with a sun low over the horizon.
 magick -size ${SW}x${SH} gradient:'#2f6491-#f0c97e' \
     -fill '#d9762f' -draw "circle $((SW*30/100)),$((SH*62/100)) $((SW*30/100)),$((SH*22/100))" \
@@ -44,18 +50,24 @@ magick "$WORK/screen.png" "$WORK/mask.png" -alpha off -compose CopyOpacity -comp
 # The body, its bezel, and a suggestion of keys underneath.
 magick -size ${S}x${S} xc:none \
     -fill '#2a2f36' -draw "roundrectangle $((S*56/1024)),$((S*56/1024)) $((S*968/1024)),$((S*968/1024)) $((S*192/1024)),$((S*192/1024))" \
-    -fill '#0e1116' -draw "roundrectangle $((S*144/1024)),$((S*208/1024)) $((S*880/1024)),$((S*720/1024)) $((S*36/1024)),$((S*36/1024))" \
+    -fill '#0e1116' -draw "roundrectangle $((S*144/1024)),$((S*TOP/1024)) $((S*880/1024)),$((S*(TOP+BEZEL_H)/1024)) $((S*36/1024)),$((S*36/1024))" \
     "$WORK/body.png"
 
 magick "$WORK/body.png" "$WORK/screen.png" \
-    -geometry +$((S*180/1024))+$((S*236/1024)) -composite "$WORK/icon.png"
+    -geometry +$((S*180/1024))+$((S*(TOP+28)/1024)) -composite "$WORK/icon.png"
 
-magick "$WORK/icon.png" -fill '#575f6a' \
-    -draw "roundrectangle $((S*236/1024)),$((S*788/1024)) $((S*388/1024)),$((S*852/1024)) $((S*20/1024)),$((S*20/1024))" \
-    -draw "roundrectangle $((S*412/1024)),$((S*788/1024)) $((S*564/1024)),$((S*852/1024)) $((S*20/1024)),$((S*20/1024))" \
-    -draw "roundrectangle $((S*588/1024)),$((S*788/1024)) $((S*740/1024)),$((S*852/1024)) $((S*20/1024)),$((S*20/1024))" \
-    -draw "roundrectangle $((S*764/1024)),$((S*788/1024)) $((S*860/1024)),$((S*852/1024)) $((S*20/1024)),$((S*20/1024))" \
-    "$OUT/icon.png"
+# Four equal keys under the screen, flush with its edges: 664 wide less three gaps of 24 is four
+# keys of 148. Lined up with the screen they are centred by construction; by hand the last one came
+# out narrower than the rest and the row sat 36 units right of centre.
+KEY_Y0=$((S*(TOP+BEZEL_H+KEY_GAP)/1024)); KEY_Y1=$((S*(TOP+BEZEL_H+KEY_GAP+KEY_H)/1024))
+KEY_R=$((S*20/1024))
+KEYS=()
+for i in 0 1 2 3; do
+    X0=$((S*(180 + i*(148+24))/1024))
+    X1=$((S*(180 + i*(148+24) + 148)/1024))
+    KEYS+=(-draw "roundrectangle ${X0},${KEY_Y0} ${X1},${KEY_Y1} ${KEY_R},${KEY_R}")
+done
+magick "$WORK/icon.png" -fill '#575f6a' "${KEYS[@]}" "$OUT/icon.png"
 
 # Platform bundles. jpackage wants .icns on macOS, .ico on Windows, and a .png on Linux.
 if command -v iconutil >/dev/null 2>&1; then
