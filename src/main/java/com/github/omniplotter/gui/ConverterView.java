@@ -543,7 +543,9 @@ public class ConverterView extends StackPane {
         sourceDetail.getStyleClass().add(Styles.TEXT_MUTED);
         sourceDetail.setMinWidth(Region.USE_PREF_SIZE);
 
-        HBox row = new HBox(0, sourceCaption, sourceDetail);
+        // The gap is here rather than in the message: a properties file drops the leading space of
+        // a value, which is how the size ended up glued to the name — "notes.pdf— 1537 × 2174".
+        HBox row = new HBox(4, sourceCaption, sourceDetail);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setMinWidth(0);
         return row;

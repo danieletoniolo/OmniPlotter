@@ -518,8 +518,17 @@
     -fx-effect: dropshadow(gaussian, -op-shadow-strong, 30, 0.0, 0, 10);
 }
 
-/* A glass ScrollPane, so both properties have to be cleared or the viewport shows through it. */
-.help-panel,
+/*
+ * Solid, unlike every other surface in the window. The glass that reads well on a small card is a
+ * wall of prose over a busy window here, and the text behind came straight through the text in
+ * front — seen for the first time in a screenshot, where it was unreadable.
+ */
+.help-panel {
+    -fx-background-color: -color-bg-default;
+    -fx-background-radius: 16px;
+    -fx-background-insets: 0;
+}
+
 .help-panel > .viewport {
     -fx-background: transparent;
     -fx-background-color: transparent;
