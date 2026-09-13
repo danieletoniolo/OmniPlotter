@@ -1,41 +1,47 @@
 # OmniPlotter
 
-A desktop app that converts images into the picture and script formats graphing calculators can
-open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` / `.8ca` / `.8ci` / `.8xi` and friends, the Zero
-`pic`, and the Python generators for kandinsky, casioplot, gint, ti_draw, nsp and hpprime.
+A desktop application that puts your pictures on a graphing calculator. It converts images into the
+picture and script formats calculators can open — Casio `.g3p` / `.g4p` / `.c2p`, TI `.8xv` /
+`.8ca` / `.8ci` / `.8xi` and friends, the Zero `pic`, and the Python generators for kandinsky,
+casioplot, gint, ti_draw, nsp and hpprime.
 
 It also takes a PDF or a large scan and cuts it into pieces that each fill the calculator's screen,
 which is what makes a page of notes readable on one.
 
-It is a native port of [TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), with both a
-window and a command line.
+There is a window and there is a command line, and they are the same program: the installed
+application runs as either.
 
-## Getting started
+The file formats come from [TI-Planet's img2calc](https://tiplanet.org/forum/img2calc.php), and the
+encoders are checked byte for byte against it — 591 golden vectors, every format, all matching. What
+is built on top of them is this project's own: the window, PDFs cut into tiles, the photo and
+document treatments, reading a calculator file back apart, and a command line for whole folders at
+once.
 
-```bash
-./setup.sh
-```
+## Installing
 
-Downloads a JDK and Maven into `tools/` and resolves every dependency into `.mvn/repo` and `libs/`.
-Nothing is installed system-wide and your `~/.m2` is never touched, so the checkout is
-self-contained and safe to delete.
+The [releases page](../../releases/latest) carries an installer for macOS, Windows and Linux, a
+`SHA256SUMS` to check a download against, and `omniplotter-<version>-cli.jar` — the command line
+without the window, small and platform-independent, for anyone who already has a JDK 21.
 
-Building and testing need nothing else. Regenerating the reference vectors additionally needs the
-img2calc submodule, which a plain clone does not fetch:
+The builds are not signed, so the first launch is refused on both desktops. On macOS, open System
+Settings → Privacy & Security after the refusal and choose "Open Anyway"; the right-click → Open
+route is no longer reliable on recent versions. From a terminal,
+`xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` does the same. On Windows,
+SmartScreen wants "More info" → "Run anyway".
 
-```bash
-git submodule update --init
-```
+## The window
 
-```bash
-./omniplotter.sh run          # open the app
-./omniplotter.sh cli --help   # command line
-./omniplotter.sh test         # test suite
-./omniplotter.sh package      # native installer for this platform
-```
+Drop images or a PDF onto the window, or click the empty list to pick them. The panel on the right
+asks its questions in the order a conversion happens — which calculator, how big, how it should
+look, how to cut a page up, what the calculator should call the file — and only asks the ones that
+apply to what you dropped.
 
-These also work against a JDK and Maven already on your PATH, without `setup.sh` — which is how CI
-runs them, so there is only one way to build.
+The preview beside the source is not a scaled-down copy of it: it is the actual preprocessed image,
+the same pixels the encoder will consume, so the dithering and the palette banding are visible
+before anything is written. It says up front when a file will be too big for the calculator to
+take, rather than letting you find out at transfer time.
+
+The window is in English and Italian, and follows the desktop's light or dark setting.
 
 ## Command line
 
@@ -46,6 +52,9 @@ omniplotter formats --target cg
 omniplotter targets --mode var
 omniplotter inspect PICT1.g3p
 ```
+
+Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
+tool translates directly into a command here.
 
 A photograph and a screenshot of text want opposite treatment, and the conversion is tuned for the
 first. `--look document` turns dithering off and hardens the contrast, which is the difference
@@ -102,18 +111,48 @@ click any cell to exclude it, because nobody wants the running header as one of 
 images. The window converts the page you are looking at; whole documents go through the command
 line.
 
-Format and target identifiers are the same strings img2calc uses in its URLs, so a link from the web
-tool translates directly into a command here.
+### Making it available
 
 The installed application is the command line: arguments mean the CLI, no arguments mean the
 window. `omniplotter setup` links it into `~/.local/bin` under that name — or, on Windows, writes a
 shim and points at the console launcher, since the one the desktop starts has nowhere to print.
-Where the link would not be found, it shows the line to add and asks first rather than editing a
-shell's configuration on its own. `omniplotter doctor` prints where everything ended up.
+Where the link would not be found, it shows the line to add and offers to add it rather than editing
+a shell's configuration on its own. `omniplotter doctor` prints where everything ended up.
 
-`inspect` reads a Casio file back apart — un-inverts the header, checks the sizes recorded in
-different places against each other, undoes the CP obfuscation and inflates the pixel data. That is
-the question that actually matters: whether the calculator will open the file.
+The window can do the same, from the menu beside the convert button.
+
+### Reading a file back apart
+
+`inspect` un-inverts a Casio header, checks the sizes recorded in different places against each
+other, undoes the CP obfuscation and inflates the pixel data. That is the question that actually
+matters: whether the calculator will open the file.
+
+## Building it
+
+```bash
+./setup.sh
+```
+
+Downloads a JDK and Maven into `tools/` and resolves every dependency into `.mvn/repo` and `libs/`.
+Nothing is installed system-wide and your `~/.m2` is never touched, so the checkout is
+self-contained and safe to delete.
+
+Building and testing need nothing else. Regenerating the reference vectors additionally needs the
+img2calc submodule, which a plain clone does not fetch:
+
+```bash
+git submodule update --init
+```
+
+```bash
+./omniplotter.sh run          # open the app
+./omniplotter.sh cli --help   # command line
+./omniplotter.sh test         # test suite
+./omniplotter.sh package      # native installer for this platform
+```
+
+These also work against a JDK and Maven already on your PATH, without `setup.sh` — which is how CI
+runs them, so there is only one way to build.
 
 ## Correctness
 
@@ -163,30 +202,18 @@ reference/img2calc/      img2calc itself, as a pinned submodule
 
 ## Notes
 
-- The preview in the window is the actual preprocessed image, not a scaled-down source, so
-  quantisation and dithering are visible before anything is written.
-- Some behaviour is faithfully odd because the reference is: the TI checksum sums untruncated values
-  while the file stores truncated bytes, `im8c` drops literal pixels still buffered when the image
-  ends, and `zpic` wraps on the canvas width rather than the image width. These are reproduced
-  deliberately — the goal is files that behave exactly like img2calc's.
+Some behaviour is faithfully odd because the reference is: the TI checksum sums untruncated values
+while the file stores truncated bytes, `im8c` drops literal pixels still buffered when the image
+ends, and `zpic` wraps on the canvas width rather than the image width. These are reproduced
+deliberately — the goal is files that behave exactly like img2calc's.
 
 ## Releases
 
-Pushing a `v*` tag builds installers for macOS, Windows and Linux and attaches them to a GitHub
-Release. The tag is the version: it is written into the POM, and from there into the jar manifest,
-what `--version` prints, and the installer metadata.
+Pushing a `v*` tag builds the installers on clean runners and attaches them to a GitHub Release,
+together with the checksums and the command-line jar. The tag is the version: it is written into the
+POM, and from there into the jar manifest, what `--version` prints, and the installer metadata.
 
-Each release carries the three installers, a `SHA256SUMS` to check them against, and
-`omniplotter-<version>-cli.jar` — the command line without JavaFX, small and platform-independent,
-for anyone who already has a JDK 21.
-
-The builds are unsigned, so the first launch is refused on both desktops. On macOS, open System
-Settings → Privacy & Security after the refusal and choose "Open Anyway"; the right-click → Open
-route is no longer reliable on recent versions. From a terminal,
-`xattr -dr com.apple.quarantine /Applications/OmniPlotter.app` does the same. On Windows,
-SmartScreen wants "More info" → "Run anyway".
-
-What is planned after the first release, and what has been deliberately ruled out, is in
+What each release brought, and what has been deliberately ruled out, is in
 [ROADMAP.md](ROADMAP.md).
 
 ## License

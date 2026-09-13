@@ -1,7 +1,10 @@
-# Roadmap
+# What shipped, and what did not
 
-What is planned, in what order, and why. The version numbers are intent rather than promises and
-there are no dates. Items move when they turn out to be harder, or less useful, than they looked.
+What each release brought — including the parts that came out differently from how they were
+planned, which are the ones worth keeping — and the things deliberately ruled out.
+
+Ideas not committed to are not here. They live in a notebook outside the repository, where one can
+be written down, reconsidered and dropped without ever having been read as a promise.
 
 One rule orders everything below: nothing ships that would disappoint on first use. It is the same
 instinct as the golden vectors — a file the calculator refuses is worse than no file, and a feature
@@ -67,35 +70,35 @@ Four things came out differently from how this section first described them:
 PDFBox needed no addition to the hand-maintained `jlink` list, unlike the previous two releases. It
 costs four megabytes: the fat jar goes from 10 to 14, and the command-line jar from 1.5 to 5.1.
 
-## 1.3 and beyond
+### 1.2.1 — fixes, and a window that explains itself
 
-Roughly in order of value for the effort, not commitments.
+A point release: nothing here converts anything 1.2 could not. It is fixes, and the window reworked
+around what 1.2 added. The output panel became a numbered timeline that fills in as a file arrives,
+one step open at a time; there is a short tour and a panel of concepts behind an info button; the
+commands the window proposes can be copied, with an offer to add the PATH line rather than only
+showing it; and the window reads in Italian as well as English.
 
-- **`extract`: the conversion backwards**, from a calculator file to a PNG. Most of it exists —
-  [CasioFileInspector](src/main/java/com/github/omniplotter/engine/inspect/CasioFileInspector.java)
-  already returns the inflated pixels, so what is missing is the palette and writing a PNG. It buys
-  round-trip tests, an inspector tab in the window, and with jpackage's `--file-associations` a
-  double-clicked `.g3p` that opens and explains itself. img2calc cannot do this.
-- **Copy to the calculator.** Casio models mount as USB mass storage, so detecting the volume and
-  offering a button is a small amount of work for something that feels like magic. Linking to TI
-  calculators through `tilp` is a project in its own right and is not promised here.
-- **Profiles**, saved and recalled by name, with `--profile` on the command line and a `--json`
-  output mode for scripting.
-- **Distribution channels.** A Homebrew cask in a personal tap first — it works immediately, unlike
-  the official repository, and gives macOS users a real upgrade path. Then an AUR `PKGBUILD` and
-  winget.
-- **Folders dropped in and walked recursively**, conversions in parallel, cancellation, reveal in
-  file manager.
-- **Translations**, Italian and French alongside English. The community this is aimed at is largely
-  French-speaking, and the tool it is a port of is French.
-- **`inspect` for TI containers**, checksums included, which completes the story `extract` starts.
-- **Animation.** Multiple frames into one generated script, and GIF input.
-- **A headless smoke test for the window** in CI, through TestFX and Monocle.
+Most of it was finding out that things did not work:
 
-An idea worth recording even though it is a separate project: for a page of pure text, instead of
-rendering it as an image, extract the text with PDFBox and generate a script that draws it with the
-calculator's own font. Perfectly sharp, and a fraction of the size. It breaks on formulae and
-diagrams, so it would be an additional mode and never a replacement.
+- **The update check had never fired, and the code was right.** The repository is private, so an
+  anonymous request for `/releases/latest` answers 404 and the window correctly says nothing. What
+  was wrong around it: a failed check wrote the twenty-four-hour timestamp *before* the request, so
+  being offline at launch used the day up; its only diagnostic went to `FINE` while the log keeps
+  `INFO`; and the managed-install guard read the JVM's path, so a Homebrew or distribution JDK
+  switched the check off for every jar-based run.
+- **Bold text was being synthesised.** Neither the theme nor this project names a font family, and
+  the platform's hidden system font has no bold face JavaFX can find, so it inked the regular one
+  heavier and left the advances alone: 116.13px regular against 116.13px bold, measured. Naming a
+  family gets a real cut. Helvetica Neue is not that family — on macOS its bold resolves to the
+  *Condensed* face.
+- **A box will not go below the sum of its children's minimums.** The first version of the step
+  animation drove the preferred height to zero, which a column of sliders simply ignored: it sat at
+  full size and moved in the last few frames. That is what a jerk is.
+- **A trackpad does not send a wheel.** It sends a gesture of many small deltas and then a tail of
+  inertia that runs for a second, which counted as wheel crossed three steps for one flick.
+- **Steps that do not apply were first left openable**, on the grounds that the sequence should
+  suggest rather than lock. Wrong: with nothing to convert, clicking a dim heading put a panel of
+  settings on screen for a conversion with no subject. Dimming has to mean unavailable.
 
 ## Decided against
 

@@ -46,6 +46,9 @@ build/
 /tools/jdk/
 /tools/maven/
 
+### The idea notebook: thinking out loud, not a published plan. See ROADMAP.md for what shipped. ###
+NOTES.md
+
 ### Logs ###
 *.log
 
